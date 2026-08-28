@@ -44,8 +44,8 @@ You will also need active endpoints for:
 
 **1. Clone the repository**
 ```bash
-git clone <your-repo-url>
-cd newman-assistant
+git clone https://github.com/digi-works/dw-newman-ui
+cd dw-newman-ui
 ```
 
 **2. Install dependencies**
@@ -62,17 +62,7 @@ npm install lucide-react @copilotkit/react-core
 *(If you are using yarn, run `yarn install` and `yarn add lucide-react @copilotkit/react-core`)*
 
 **3. Configure Environment Variables**
-Create a `.env.local` file in the root of your project and add your keys. It should look something like this:
-
-```env
-# Database connection string from NeonDB
-DATABASE_URL="postgresql://<user>:<password>@<host>.neon.tech/<dbname>?sslmode=require"
-
-# Flowise API Configuration
-NEXT_PUBLIC_FLOWISE_API_ENDPOINT="https://your-flowise-instance.com/api/v1/prediction/<chatflow-id>"
-
-# CopilotKit (if applicable to your backend route)
-OPENAI_API_KEY="your-openai-api-key"
+Create a `.env` file in the root of your project and add your keys. 
 ```
 
 **4. Add Static Assets**
