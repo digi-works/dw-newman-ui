@@ -1,256 +1,122 @@
-# CopilotKit <> LangGraph Starter
+# Newman Campus Assistant
 
-This is a starter template for building AI agents using [LangGraph](https://www.langchain.com/langgraph) and [CopilotKit](https://copilotkit.ai). It provides a modern Next.js application with an integrated LangGraph agent to be built on top of.
+A production-grade, AI-powered campus assistant built for Newman University. This application features a dual-workspace design: a conversational AI interface powered by Flowise, and a real-time Room Bookings dashboard connected to NeonDB (PostgreSQL).
 
-https://github.com/user-attachments/assets/47761912-d46a-4fb3-b9bd-cb41ddd02e34
+## ✨ Features
 
-## Prerequisites
+* **Dual Workspace Layout**: Seamlessly toggle between the AI Chat and the Bookings Dashboard.
+* **Flowise AI Integration**: Real-time streaming AI responses with a custom `ChatWorkspace` component.
+* **Production Chat UI**:
+  * Unique Session IDs to sandbox user memory securely.
+  * Sidebar chat history with native dropdowns for renaming and deleting.
+  * "Gemini-style" expandable/collapsible thought process UI with CSS grid animations.
+  * Auto-titling of new chats based on the first prompt.
+* **Generative UI**: Automatically detects when the AI requests booking details and injects a native, interactive React form directly into the chat stream.
+* **Real-time Bookings Dashboard**: Fetches and filters PostgreSQL data from NeonDB with views for Upcoming, Confirmed, Tentative, and Declined bookings.
+* **Theming**: Pixel-perfect Light and Dark modes using CSS variables.
 
-- Node.js 18+
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) (Python package manager)
-- Any of the following package managers:
-  - npm (default)
-  - [pnpm](https://pnpm.io/installation)
-  - [yarn](https://classic.yarnpkg.com/lang/en/docs/install/)
-  - [bun](https://bun.sh/)
-- OpenAI API Key (for the LangGraph agent)
+---
 
-## Getting Started
+## 🛠 Tech Stack
 
-1. Install dependencies using your preferred package manager:
+* **Framework**: [Next.js](https://nextjs.org/) (App Router / React)
+* **AI Backend**: [Flowise](https://flowiseai.com/)
+* **Database**: [NeonDB](https://neon.tech/) (Serverless PostgreSQL)
+* **Agent Toolkit**: [CopilotKit](https://docs.copilotkit.ai/)
+* **Icons**: [Lucide React](https://lucide.dev/)
+* **Styling**: Standard CSS (Custom Variables & Grid Animations)
+
+---
+
+## ⚙️ Prerequisites
+
+Before you begin, ensure you have the following installed:
+* [Node.js](https://nodejs.org/en/) (v18 or higher)
+* `npm`, `yarn`, or `pnpm`
+
+You will also need active endpoints for:
+1. **NeonDB**: A PostgreSQL connection string.
+2. **Flowise**: Your deployed Flowise chatflow API endpoint.
+
+---
+
+## 🚀 Installation & Setup
+
+**1. Clone the repository**
+```bash
+git clone <your-repo-url>
+cd newman-assistant
+```
+
+**2. Install dependencies**
+Install the standard Next.js dependencies, followed by the specific packages required for the UI and AI integration:
 
 ```bash
-# Using npm (default)
+# Install base dependencies
 npm install
 
-# Using pnpm
-pnpm install
-
-# Using yarn
-yarn install
-
-# Using bun
-bun install
+# Install required packages for icons and CopilotKit integration
+npm install lucide-react @copilotkit/react-core
 ```
 
-This will also install the Python agent dependencies via `uv sync`.
+*(If you are using yarn, run `yarn install` and `yarn add lucide-react @copilotkit/react-core`)*
 
-2. Set up your environment variables:
+**3. Configure Environment Variables**
+Create a `.env.local` file in the root of your project and add your keys. It should look something like this:
 
-```bash
-cp .env.example .env
+```env
+# Database connection string from NeonDB
+DATABASE_URL="postgresql://<user>:<password>@<host>.neon.tech/<dbname>?sslmode=require"
+
+# Flowise API Configuration
+NEXT_PUBLIC_FLOWISE_API_ENDPOINT="https://your-flowise-instance.com/api/v1/prediction/<chatflow-id>"
+
+# CopilotKit (if applicable to your backend route)
+OPENAI_API_KEY="your-openai-api-key"
 ```
 
-Then edit the `.env` file and add your OpenAI API key:
+**4. Add Static Assets**
+Ensure the following images are placed in the `/public` folder at the root of the project:
+
+* `newman-logo.png` (Used in the top navigation bar)
+* `newman-chat.png` (Used as the AI's avatar in the chat)
+
+**5. Run the Development Server**
 
 ```bash
-OPENAI_API_KEY=your-openai-api-key-here
-```
-
-3. Start the development server:
-
-```bash
-# Using npm (default)
 npm run dev
-
-# Using pnpm
-pnpm dev
-
-# Using yarn
-yarn dev
-
-# Using bun
-bun run dev
 ```
 
-This will start both the UI and agent servers concurrently.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Running a Channel
+---
 
-`channel-host.mts` mounts the same agent as an Intelligence Channel
-(Slack, Teams). It requires `INTELLIGENCE_API_KEY` and a declared Channel in
-`.copilotkit/channels.json` — set both up with `copilotkit init` or
-`copilotkit channels add`, which write that file and the credentials your
-`.env` needs, then:
+## 📁 Key Folder Structure
 
-```bash
-npm run channel
-```
-
-The host reads which Channel to hold from `.copilotkit/channels.json`. If a
-project declares more than one, set `INTELLIGENCE_CHANNEL_NAME` to pick one.
-
-The host holds no provider credentials and exposes no provider endpoint —
-Intelligence owns the provider edge — so the same file works for every provider.
-
-The Channel itself is declared in `channels.mts` — that is where to add commands,
-reactions, or an `onMention` handler. `channel-host.mts` only owns the process
-lifetime, and is byte-identical in every starter.
-
-Once startup finishes, the log reports the truth per Channel rather than a
-blanket success:
-
-- `Channel "<name>" is online.` — the session is up and can send.
-- `Channel "<name>" is declared but no provider is attached yet.` —
-  a normal waiting state, not a failure. Run `copilotkit channels status` to
-  see what setup remains (e.g. finishing a Slack app install).
-
-Either message means the runtime activated and the gateway accepted the
-Channel. Neither one proves the provider app is installed, that it has been
-invited to a channel, or that anyone can message it — verify those separately
-(invite the bot, then message it) before treating the Channel as working.
-
-## Available Scripts
-
-The following scripts can also be run using your preferred package manager:
-
-- `dev` - Starts both UI and agent servers in development mode
-- `dev:debug` - Starts development servers with debug logging enabled
-- `dev:ui` - Starts only the Next.js UI server
-- `dev:agent` - Starts only the LangGraph agent server
-- `build` - Builds the Next.js application for production
-- `start` - Starts the production server
-- `install:agent` - Installs Python dependencies for the agent
-- `channel` - Holds an Intelligence Channel open (see "Running a Channel" above)
-- `typecheck:channel` - Type-checks the channel host on its own `tsconfig.channel.json`
-
-## Project Structure
-
-```
-├── src/                         # Next.js frontend source
+```text
+├── public/
+│   ├── newman-logo.png         # Navbar logo
+│   └── newman-chat.png         # AI chat avatar
+├── src/
 │   ├── app/
-│   │   ├── page.tsx             # Main page
-│   │   └── api/copilotkit/      # CopilotKit API route
+│   │   ├── page.tsx            # Main layout, sidebar state, and routing
+│   │   ├── globals.css         # Global styling, themes, and animations
+│   │   └── api/                # Next.js API routes (NeonDB & CopilotKit)
 │   ├── components/
-│   │   ├── example-canvas/      # Todo list UI
-│   │   ├── example-layout/      # Layout: chat + canvas side-by-side
-│   │   └── generative-ui/       # Example generative UI components
-│   └── hooks/
-├── agent/                       # LangGraph Python agent
-│   ├── main.py                  # Agent entry point
-│   └── src/
-│       ├── todos.py             # Todo tools and state schema
-│       └── query.py             # Example data query tool
-├── scripts/                     # Agent setup and run scripts
-│   ├── setup-agent.sh / .bat
-│   └── run-agent.sh / .bat
-├── public/                      # Static assets
-├── next.config.ts
-├── tsconfig.json
-└── package.json
+│   │   ├── ChatWorkspace.tsx   # Flowise streaming, thinking UI, Generative Form
+│   │   └── BookingsWorkspace.tsx # NeonDB table UI, status filters
+│   └── types/
+│       └── index.ts            # TypeScript interfaces (ChatSession, etc.)
 ```
 
-## A2UI — Agent-to-User Interface
+---
 
-This starter includes [A2UI](https://a2ui.org/specification/) support, allowing the agent to generate rich, interactive UI surfaces declaratively. Instead of returning plain text, the agent sends a JSON description of the UI it wants to render, and the frontend turns it into real components.
+## 🧠 Using the Generative UI Booking Form
 
-### How it works
+The chat interface is programmed to intelligently detect booking intents.
+If the Flowise AI responds with a message containing both `"Full name"` and `"Student ID"`, the frontend will automatically intercept the text and render the interactive `<BookingDetailsForm />` inside the chat bubble.
 
-A2UI uses three concepts:
+To test this, prompt the AI:
 
-1. **Catalog** — a set of component definitions (schema) paired with React renderers. Registered once in `layout.tsx` via `<CopilotKitProvider a2ui={{ catalog: demonstrationCatalog }}>`.
-2. **Surface** — a rendered UI instance. The agent creates a surface, sets its components, and binds data to it.
-3. **Operations** — the agent returns `a2ui.render(operations=[...])` from a tool, which the middleware streams to the frontend.
+> *"I want to book the Alumni Board Room for 13 people on August 30th."*
 
-### Two patterns
-
-| Pattern            | Description                                                                   | Agent tool       | Frontend                                    |
-| ------------------ | ----------------------------------------------------------------------------- | ---------------- | ------------------------------------------- |
-| **Fixed schema**   | Pre-defined component layout. Only the data changes per invocation.           | `search_flights` | Schema in `a2ui/schemas/flight_schema.json` |
-| **Dynamic schema** | A secondary LLM generates both components and data based on the conversation. | `generate_a2ui`  | Components decided at runtime               |
-
-Both patterns use the same catalog on the frontend — the difference is where the component tree comes from.
-
-### Key files
-
-| Purpose                              | Path                                               |
-| ------------------------------------ | -------------------------------------------------- |
-| Catalog definitions (Zod schemas)    | `src/app/declarative-generative-ui/definitions.ts` |
-| Catalog renderers (React components) | `src/app/declarative-generative-ui/renderers.tsx`  |
-| Catalog registration                 | `src/app/layout.tsx`                               |
-| Fixed-schema agent tool              | `agent/src/a2ui_fixed_schema.py`                   |
-| Dynamic-schema agent tool            | `agent/src/a2ui_dynamic_schema.py`                 |
-| Flight schema JSON                   | `agent/src/a2ui/schemas/flight_schema.json`        |
-| Showcase config                      | `showcase.json`                                    |
-
-### Adding a custom component
-
-1. **Define** the component schema in `definitions.ts`:
-
-   ```typescript
-   MyWidget: {
-     description: "A brief description for the agent.",
-     props: z.object({ title: z.string(), value: z.number() }),
-   },
-   ```
-
-2. **Render** it in `renderers.tsx`:
-
-   ```typescript
-   MyWidget: ({ props }) => (
-     <div>{props.title}: {props.value}</div>
-   ),
-   ```
-
-   Renderers are type-checked against the definitions — TypeScript will error if props don't match.
-
-3. **Use it** from the agent. The component is automatically available to both fixed-schema templates and the dynamic-schema LLM.
-
-### Adding a new fixed-schema tool
-
-1. Create a JSON schema file in `agent/src/a2ui/schemas/` describing the component tree.
-2. Create a Python tool that loads the schema with `a2ui.load_schema()` and returns `a2ui.render(operations=[...])` with your data. See `a2ui_fixed_schema.py` for the pattern.
-
-### Showcase mode
-
-`showcase.json` controls which suggestion pills are visually highlighted. Set `"showcase": "a2ui"` to highlight the A2UI demos, or `"showcase": "default"` for no highlights. This is configured automatically when scaffolding via `npx copilotkit create --framework a2ui`.
-
-### Further reading
-
-- [A2UI Specification](https://a2ui.org/specification/)
-- [CopilotKit A2UI Documentation](https://docs.copilotkit.ai)
-
-## Documentation
-
-- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/) - Learn more about LangGraph and its features
-- [CopilotKit Documentation](https://docs.copilotkit.ai) - Explore CopilotKit's capabilities
-
-## Contributing
-
-Feel free to submit issues and enhancement requests! This starter is designed to be easily extensible.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Troubleshooting
-
-### Agent Connection Issues
-
-If you see "I'm having trouble connecting to my tools", make sure:
-
-1. The LangGraph agent is running on port 8123
-2. Your OpenAI API key is set correctly
-3. Both servers started successfully
-
-### Python Dependencies
-
-If you encounter Python import errors:
-
-```bash
-npm run install:agent
-```
-
-## CopilotKit Intelligence
-
-This app is connected to the CopilotKit Intelligence project **newman-frontend**
-(recorded in `.copilotkit/project.json`). Intelligence adds durable threads,
-message & event persistence, and analytics for your agent.
-
-- **License:** a token is stored as `COPILOTKIT_LICENSE_TOKEN` in your `.env`.
-- **Switch project:** run `copilotkit project select` from this directory.
-- **Run it:** follow "Getting Started" above — install dependencies, set your
-  keys in `.env`, then `npm run dev`.
-
-Learn more at https://docs.copilotkit.ai.
