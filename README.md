@@ -64,6 +64,7 @@ npm install lucide-react @copilotkit/react-core
 **3. Configure Environment Variables**
 Create a `.env` file in the root of your project and add your keys. 
 
+
 **4. Add Static Assets**
 Ensure the following images are placed in the `/public` folder at the root of the project:
 

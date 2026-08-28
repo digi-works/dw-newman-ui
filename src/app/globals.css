@@ -491,80 +491,6 @@ textarea {
   transform: none;
 }
 
-/* --- Production-Level Gemini-Style Thinking UI --- */
-.thinking-wrapper {
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.thinking-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  border-radius: 16px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-}
-
-.thinking-toggle:hover {
-  background: var(--sidebar-hover);
-  color: var(--text-main);
-}
-
-.thinking-content-wrapper {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  width: 100%;
-}
-
-.thinking-content-wrapper.expanded {
-  grid-template-rows: 1fr;
-}
-
-.thinking-content-inner {
-  overflow: hidden;
-}
-
-.thinking-content {
-  margin-top: 12px;
-  padding: 8px 16px;
-  border-left: 2px solid #cbd5e1;
-  color: var(--text-muted);
-  font-family: inherit; 
-  font-size: 14px;
-  line-height: 1.6;
-  background: transparent;
-  white-space: pre-wrap;
-}
-
-.app-wrapper.dark-theme .thinking-content {
-  border-left-color: #334155;
-}
-
-.thinking-loading-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #94a3b8;
-  animation: pulseDot 1.5s infinite ease-in-out;
-}
-
-@keyframes pulseDot {
-  0% { transform: scale(0.8); opacity: 0.5; }
-  50% { transform: scale(1.2); opacity: 1; background: #7c3aed; }
-  100% { transform: scale(0.8); opacity: 0.5; }
-}
-
 /* --- Clean Message Formatting --- */
 .formatted-message p {
   margin-bottom: 10px;
@@ -580,7 +506,7 @@ textarea {
 }
 
 /* ============================================================== */
-/*                 BOOKINGS DASHBOARD (SIDEBAR LAYOUT)            */
+/* BOOKINGS DASHBOARD (SIDEBAR LAYOUT)            */
 /* ============================================================== */
 
 .bookings-workspace {
@@ -797,7 +723,7 @@ textarea {
 }
 
 /* ============================================================== */
-/*                 GENERATIVE UI: BOOKING FORM                    */
+/* GENERATIVE UI: BOOKING FORM                    */
 /* ============================================================== */
 
 .booking-form-card {
@@ -870,4 +796,25 @@ textarea {
   background: var(--border-color);
   color: var(--text-muted);
   cursor: not-allowed;
+}
+
+/* --- Animated "Analyzing" Text --- */
+.analyzing-text-animated {
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 500;
+  background: linear-gradient(90deg, #7c3aed, #ec4899, #3b82f6, #7c3aed);
+  background-size: 300% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shineText 2.5s linear infinite;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+@keyframes shineText {
+  to {
+    background-position: 300% center;
+  }
 }
