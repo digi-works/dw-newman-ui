@@ -61,9 +61,8 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
   const renderFormattedText = (text: string, hideBookingList: boolean = false) => {
     let cleanText = text;
     
-    // Aggressive Text Cutter for the AI's raw list
     if (hideBookingList) {
-      const splitMatch = text.match(/(I still need|Please reply|1\.|Please send|Please provide|Your details|To book this|For the booking|Please share|I'll need|I will need|Fill out|Fill in|Enter your|Details for|I need a couple details)/i);
+      const splitMatch = text.match(/(I still need|Please reply|1\.|Please send|Please provide|Your details|To book this|For the booking|Please share|I'll need|I will need|Fill out|Fill in|Enter your|Details for|I need a couple details|Full name|Name:)/i);
       if (splitMatch && splitMatch.index !== undefined) {
         cleanText = text.substring(0, splitMatch.index).trim();
       }
@@ -79,7 +78,8 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
         );
       }
       if (line.trim().startsWith('-') || line.trim().startsWith('*')) {
-        return <li key={idx} style={{ marginLeft: '16px' }}>{formattedLine}</li>;
+        const cleanLine = line.trim().substring(1).trim();
+        return <li key={idx} style={{ marginLeft: '16px', marginBottom: '4px' }}>{cleanLine}</li>;
       }
       return <p key={idx}>{formattedLine || <br />}</p>;
     });
@@ -89,8 +89,6 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     if (!textToSend.trim() || isLoading) return;
     
     setIsLoading(true);
-    
-    // Pick a brand new random fact every time the user sends a message
     setLoadingFact(NEWMAN_FACTS[Math.floor(Math.random() * NEWMAN_FACTS.length)]);
 
     const userMsgId = Date.now().toString();
@@ -170,6 +168,14 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
 
   // --- GENERATIVE UI: FULL BOOKING FORM COMPONENT ---
   const BookingDetailsForm = ({ aiMessage }: { aiMessage: string }) => {
+    const [room, setRoom] = useState('');
+    const [date, setDate] = useState('');
+    const [timeSlot, setTimeSlot] = useState('');
+    
+    // State for dynamic slot fetching
+    const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+    const [isFetchingSlots, setIsFetchingSlots] = useState(false);
+
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [studentId, setStudentId] = useState('');
@@ -177,52 +183,105 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     const [attendees, setAttendees] = useState('');
     const [description, setDescription] = useState('');
     const [phone, setPhone] = useState('');
-    const [time, setTime] = useState('');
 
-    const msgLower = aiMessage.toLowerCase();
-    const needsTime = msgLower.includes('exact time') || msgLower.includes('pick one') || msgLower.includes('what time');
+    // Fetch available slots whenever the Room AND Date change
+    useEffect(() => {
+      const fetchSlots = async () => {
+        if (room.trim() && date) {
+          setIsFetchingSlots(true);
+          setTimeSlot(''); // Reset selected time
+          
+          try {
+            // TODO: Connect this to your real NeonDB API endpoint
+            // const response = await fetch(`/api/rooms/availability?room=${encodeURIComponent(room)}&date=${encodeURIComponent(date)}`);
+            // const data = await response.json();
+            // setAvailableSlots(data.slots);
+
+            // SIMULATED DB DELAY FOR NOW:
+            await new Promise(resolve => setTimeout(resolve, 800));
+            setAvailableSlots([
+              "09:00 AM - 10:30 AM",
+              "11:00 AM - 12:30 PM",
+              "02:00 PM - 04:00 PM",
+              "04:30 PM - 06:00 PM"
+            ]);
+          } catch (error) {
+            console.error("Failed to fetch slots", error);
+            setAvailableSlots([]);
+          } finally {
+            setIsFetchingSlots(false);
+          }
+        } else {
+          setAvailableSlots([]);
+          setTimeSlot('');
+        }
+      };
+
+      fetchSlots();
+    }, [room, date]);
 
     const handleSubmit = () => {
-      let finalString = `Here are my details for the booking:
-- Name: ${name}
-- Email: ${email}
-- Student ID: ${studentId}
-- Event Type: ${eventType}
-- Attendees: ${attendees}
-- Description: ${description}`;
+      const payload = {
+        action: "submit_booking_request",
+        room: room.trim(),
+        date: date,
+        timeSlot: timeSlot,
+        fullName: name.trim(),
+        email: email.trim(),
+        studentId: studentId.trim(),
+        eventType: eventType.trim(),
+        attendees: parseInt(attendees, 10) || 0,
+        description: description.trim(),
+        ...(phone && { phoneNumber: phone.trim() })
+      };
 
-      if (phone) finalString += `\n- Phone: ${phone}`;
-      if (needsTime && time) finalString += `\n- Confirmed Time: ${time}`;
-      
+      const finalString = `Here are my details for the booking:\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
       submitMessage(finalString);
     };
 
-    const isComplete = name.trim() && 
+    const isComplete = room.trim() &&
+                       date.trim() &&
+                       timeSlot.trim() &&
+                       name.trim() && 
                        email.trim() && 
                        studentId.trim() && 
                        eventType.trim() && 
                        attendees.trim() && 
-                       description.trim() && 
-                       (!needsTime || time.trim());
+                       description.trim();
 
     return (
       <div className="booking-form-card">
         <h4 className="booking-form-title">Complete your booking request</h4>
         
-        {needsTime && (
-          <div className="booking-form-row">
-            <label>Confirm Exact Date & Time</label>
-            <input 
-              type="text" 
-              className="booking-input" 
-              placeholder="e.g., Sept 2, 10:00 AM - 5:00 PM" 
-              value={time} 
-              onChange={e => setTime(e.target.value)} 
-            />
-          </div>
-        )}
+        <div className="booking-form-row">
+          <label>Target Room</label>
+          <input type="text" className="booking-input" placeholder="e.g., Alumni Board Room" value={room} onChange={e => setRoom(e.target.value)} />
+        </div>
 
         <div className="booking-form-row">
+          <label>Date</label>
+          <input type="date" className="booking-input" value={date} onChange={e => setDate(e.target.value)} />
+        </div>
+
+        <div className="booking-form-row">
+          <label>Available Time Slots</label>
+          <select 
+            className="booking-input" 
+            value={timeSlot} 
+            onChange={e => setTimeSlot(e.target.value)}
+            disabled={isFetchingSlots || availableSlots.length === 0}
+            style={{ appearance: 'auto' }} // Ensures dropdown arrow is visible
+          >
+            <option value="">
+              {isFetchingSlots ? "Checking availability..." : (availableSlots.length > 0 ? "Select a time slot" : "Select room & date first")}
+            </option>
+            {availableSlots.map(slot => (
+              <option key={slot} value={slot}>{slot}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="booking-form-row" style={{ marginTop: '8px' }}>
           <label>Full Name</label>
           <input type="text" className="booking-input" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} />
         </div>
@@ -239,7 +298,7 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
 
         <div className="booking-form-row">
           <label>Event Type</label>
-          <input type="text" className="booking-input" placeholder="e.g., club meeting, workshop, social event" value={eventType} onChange={e => setEventType(e.target.value)} />
+          <input type="text" className="booking-input" placeholder="e.g., club meeting, workshop" value={eventType} onChange={e => setEventType(e.target.value)} />
         </div>
 
         <div className="booking-form-row">
@@ -283,14 +342,15 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
           {activeChat.messages.map((msg, index) => {
             const isCurrentLoading = isLoading && msg.role === 'ai' && index === activeChat.messages.length - 1;
             
+            // STRICT PERSONAL DATA TRIGGER
             const contentLower = msg.content.toLowerCase();
-            const isBookingForm = msg.role === 'ai' && (
-              contentLower.includes('booking request') ||
-              contentLower.includes('student id') ||
-              contentLower.includes('booking form') ||
-              contentLower.includes('details for the booking') ||
-              (contentLower.includes('name') && (contentLower.includes('email') || contentLower.includes('id')))
-            );
+            
+            const hasStudentId = contentLower.includes('student id');
+            const hasEmail = contentLower.includes('email');
+            const hasFullName = contentLower.includes('full name') || contentLower.includes('your name');
+            
+            // Trigger the form only if AI requests Student ID + (Email or Name)
+            const isBookingForm = msg.role === 'ai' && hasStudentId && (hasEmail || hasFullName);
             
             const isLastMessage = index === activeChat.messages.length - 1;
 
@@ -303,7 +363,6 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                 
                 <div className={`message-bubble ${msg.role}`}>
                   
-                  {/* THE FIX: Plain text fact with animated gradient analyzing text beneath it */}
                   {msg.thought && isCurrentLoading && (
                     <div style={{ marginBottom: '16px' }}>
                       <strong style={{ 
@@ -320,7 +379,6 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                         {loadingFact}
                       </div>
                       
-                      {/* Using the new animated CSS class for the "Analyzing..." text */}
                       <div className="analyzing-text-animated">
                         {msg.thought}
                       </div>
