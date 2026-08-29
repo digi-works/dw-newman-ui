@@ -13,8 +13,8 @@
   --text-muted: #64748b;
   --sidebar-hover: #e2e8f0;
   --input-bg: #f8fafc;
-  --bubble-user: #f3e8ff;
-  --bubble-user-text: #3b0764;
+  --bubble-user: #f3e8ff; /* Restored Light Purple */
+  --bubble-user-text: #3b0764; /* Restored Dark Purple Text */
   --bubble-ai-text: #0f172a;
   --navbar-bg: #ffffff;
 }
@@ -46,7 +46,7 @@ body,
 
 button,
 input,
-textarea {
+textarea, select {
   font-family: inherit;
 }
 
@@ -112,8 +112,8 @@ textarea {
   font-size: 17px;
   font-weight: 700; /* Makes it nice and bold */
   color: var(--text-main);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; /* Modern, clean font */
-  letter-spacing: -0.02em; /* Brings the letters slightly closer for a premium logo feel */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.02em;
 }
 
 .nav-center {
@@ -447,6 +447,11 @@ textarea {
   box-shadow: 0 4px 20px rgba(124, 58, 237, 0.12); 
 }
 
+.input-box.disabled {
+  opacity: 0.6;
+  background: var(--sidebar-hover);
+}
+
 .input-box textarea {
   flex: 1;
   border: none;
@@ -465,7 +470,7 @@ textarea {
 }
 
 .send-btn {
-  background: #7c3aed; 
+  background: #7c3aed; /* Reverted to brand purple */
   color: #ffffff;
   border: none;
   border-radius: 50%;
@@ -478,6 +483,11 @@ textarea {
   margin-bottom: 2px;
   margin-left: 8px;
   transition: transform 0.1s ease;
+}
+
+.app-wrapper.dark-theme .send-btn {
+  background: #7c3aed; /* Reverted to brand purple */
+  color: #ffffff;
 }
 
 .send-btn:active {
@@ -506,7 +516,7 @@ textarea {
 }
 
 /* ============================================================== */
-/* BOOKINGS DASHBOARD (SIDEBAR LAYOUT)            */
+/* BOOKINGS DASHBOARD (SIDEBAR LAYOUT)                            */
 /* ============================================================== */
 
 .bookings-workspace {
@@ -713,7 +723,6 @@ textarea {
   color: #7c3aed;
 }
 
-/* Quick animation for the refresh button */
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -723,7 +732,7 @@ textarea {
 }
 
 /* ============================================================== */
-/* GENERATIVE UI: BOOKING FORM                    */
+/* GENERATIVE UI: 2-STEP BOOKING FORM                             */
 /* ============================================================== */
 
 .booking-form-card {
@@ -731,36 +740,52 @@ textarea {
   background: var(--bg-page);
   border: 1px solid var(--border-color);
   border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+  overflow: hidden;
+  width: 100%;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--navbar-bg);
+}
+
+.form-header h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.form-header span {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.form-body {
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-}
-
-.booking-form-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-main);
-  margin-bottom: 4px;
-}
-
-.booking-form-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 16px;
 }
 
 .booking-form-row label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  margin-bottom: 6px;
+  display: block;
 }
 
 .booking-input {
-  background: var(--input-bg);
+  width: 100%;
+  background: var(--bg-page);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px 12px;
@@ -768,6 +793,7 @@ textarea {
   color: var(--text-main);
   outline: none;
   transition: all 0.2s ease;
+  height: 40px;
 }
 
 .booking-input:focus {
@@ -775,12 +801,106 @@ textarea {
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
 }
 
-.booking-submit-btn {
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+/* Stepper Component */
+.number-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-page);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px 6px;
+  height: 40px;
+}
+
+.stepper-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  margin-left: 8px;
+}
+
+.stepper-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.stepper-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.15s ease;
+}
+
+.stepper-btn:hover {
+  background: var(--sidebar-hover);
+  color: var(--text-main);
+}
+
+/* Requirements Chips */
+.chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip-btn:hover {
+  background: var(--sidebar-hover);
+}
+
+.chip-btn.selected {
+  border-color: #ef4444; 
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* Action Buttons */
+.step-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
   margin-top: 8px;
-  background: #7c3aed;
-  color: white;
-  border: none;
-  padding: 12px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
+}
+
+.btn-secondary {
+  background: var(--input-bg);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  padding: 10px 16px;
   border-radius: 8px;
   font-weight: 600;
   font-size: 14px;
@@ -788,8 +908,28 @@ textarea {
   transition: all 0.2s ease;
 }
 
+.btn-secondary:hover {
+  background: var(--sidebar-hover);
+}
+
+.booking-submit-btn {
+  background: #7c3aed; /* Reverted to brand purple */
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.app-wrapper.dark-theme .booking-submit-btn {
+  background: #7c3aed; /* Reverted to brand purple */
+  color: #ffffff;
+}
+
 .booking-submit-btn:hover {
-  background: #6d28d9;
+  opacity: 0.9;
 }
 
 .booking-submit-btn:disabled {
@@ -816,5 +956,114 @@ textarea {
 @keyframes shineText {
   to {
     background-position: 300% center;
+  }
+}
+
+/* ============================================================== */
+/* EMPTY STATE (START CHAT)                                       */
+/* ============================================================== */
+
+.empty-state-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  height: 100%;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.empty-state-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 20px;
+}
+
+.date-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #7c3aed; /* Flat, clean purple with no glow */
+  border-radius: 50%;
+}
+
+.empty-state-greeting {
+  font-size: 42px;
+  font-weight: 400;
+  color: var(--text-main);
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+.empty-state-subtitle {
+  font-size: 16px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 48px;
+  max-width: 600px;
+}
+
+.suggestion-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+
+.suggestion-card {
+  background: var(--bg-page);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+}
+
+.suggestion-card:hover {
+  border-color: #7c3aed;
+  box-shadow: 0 4px 15px rgba(124, 58, 237, 0.08);
+  transform: translateY(-2px);
+}
+
+.card-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.card-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .suggestion-cards-grid {
+    grid-template-columns: 1fr;
   }
 }
