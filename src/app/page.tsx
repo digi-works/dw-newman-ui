@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { 
-  MessageSquare, Calendar, Sun, Moon, 
-  Plus, Trash2, Pencil, Check, MoreHorizontal 
+import {
+  Sun, Moon,
+  Trash2, Pencil, Check, MoreHorizontal
 } from 'lucide-react';
 import BookingsWorkspace from '@/components/BookingsWorkspace';
 import ChatWorkspace from '@/components/ChatWorkspace';
@@ -12,6 +12,7 @@ import type { ChatSession } from '@/types';
 export default function Page() {
   const [activeTab, setActiveTab] = useState<'chat' | 'bookings'>('chat');
   const [isDark, setIsDark] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // --- THE FIX: Unique Session ID Generation ---
   // Lazy initialization ensures this only runs once when the user first loads the app
@@ -43,6 +44,7 @@ export default function Page() {
     setChats([{ id: newId, title: 'New Chat', messages: [], updatedAt: Date.now() }, ...chats]);
     setActiveChatId(newId);
     setOpenDropdownId(null);
+    setDrawerOpen(false);
   };
 
   const deleteChat = (e: React.MouseEvent, id: string) => {
@@ -97,63 +99,80 @@ export default function Page() {
         {/* Top Navbar */}
         <header className="navbar">
           <div className="nav-left">
-            <img src="/newman-logo.png" alt="Newman Logo" className="nav-logo-img" />
-            <span className="nav-title">Newman Assistant</span>
-          </div>
-          
-          <div className="nav-center">
-            <button className={`nav-btn ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
-              <MessageSquare size={16} /> Chat
+            <button
+              type="button"
+              className="nav-hamburger"
+              onClick={() => setDrawerOpen((v) => !v)}
+              aria-label="Menu"
+            >
+              ☰
             </button>
-            <button className={`nav-btn ${activeTab === 'bookings' ? 'active' : ''}`} onClick={() => setActiveTab('bookings')}>
-              <Calendar size={16} /> Bookings
-            </button>
+            <img src="/newman-logo.svg" alt="Newman University" className="nav-logo-img" />
+            <div className="nav-brand-divider" />
+            <div className="nav-brand">
+              <span className="nav-title">Assistant</span>
+              <span className="nav-brand-kicker">Campus Hero</span>
+            </div>
           </div>
 
-          <div className="nav-right" style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={() => setIsDark(!isDark)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-              {isDark ? <Sun size={20} color="#fbbf24" /> : <Moon size={20} />}
+          <nav className="nav-center">
+            <button className={`nav-btn ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => { setActiveTab('chat'); setDrawerOpen(false); }}>
+              Chat
+            </button>
+            <button className={`nav-btn ${activeTab === 'bookings' ? 'active' : ''}`} onClick={() => { setActiveTab('bookings'); setDrawerOpen(false); }}>
+              Bookings
+            </button>
+          </nav>
+
+          <div className="nav-right">
+            <span className="nav-user-label">Facilities Office</span>
+            <button
+              type="button"
+              className="nav-theme-btn"
+              onClick={() => setIsDark(!isDark)}
+              aria-label="Toggle theme"
+            >
+              {isDark ? <Sun size={18} color="#fbbf24" /> : <Moon size={18} />}
             </button>
           </div>
         </header>
 
         {/* Main Workspace Area */}
-        <main className="main-content">
+        <main className="main-content" data-drawer={drawerOpen ? 'open' : undefined}>
           {activeTab === 'chat' ? (
-            
+
             <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-              
+
               <aside className="sidebar">
                 <button className="new-chat-btn" onClick={createNewChat}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Plus size={16} /> New Chat
-                  </div>
+                  <span className="nc-plus" aria-hidden="true">+</span> New conversation
                 </button>
 
-                <div className="sidebar-label">Recent Chats</div>
-                
+                <div className="sidebar-label">Recent</div>
+
                 <div className="chat-history">
                   {chats.map(chat => (
-                    <div 
-                      key={chat.id} 
+                    <div
+                      key={chat.id}
                       className={`history-item ${activeChatId === chat.id ? 'active' : ''}`}
                       onClick={() => {
-                        if (editingId !== chat.id) setActiveChatId(chat.id);
+                        if (editingId !== chat.id) {
+                          setActiveChatId(chat.id);
+                          setDrawerOpen(false);
+                        }
                       }}
                     >
-                      <MessageSquare size={14} color={activeChatId === chat.id ? '#7c3aed' : 'currentColor'} />
-                      
                       {editingId === chat.id ? (
                         <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '4px', height: '20px' }}>
-                          <input 
+                          <input
                             autoFocus
                             value={editTitle}
                             onChange={(e) => setEditTitle(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && saveEdit(e)}
-                            style={{ flex: 1, background: 'var(--input-bg)', color: 'var(--text-main)', border: '1px solid #7c3aed', borderRadius: '4px', padding: '0 6px', fontSize: '13px', outline: 'none', height: '22px' }}
+                            style={{ flex: 1, background: 'var(--input-bg)', color: 'var(--text-main)', border: '1px solid var(--brand)', borderRadius: '4px', padding: '0 6px', fontSize: '13px', outline: 'none', height: '22px' }}
                             onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}
                           />
-                          <button className="chat-actions-btn" onClick={saveEdit} style={{ display: 'block', color: '#10b981', padding: '2px' }}>
+                          <button className="chat-actions-btn" onClick={saveEdit} style={{ display: 'block', color: 'var(--green)', padding: '2px' }}>
                             <Check size={14} />
                           </button>
                         </div>
@@ -178,9 +197,9 @@ export default function Page() {
                                 <button onClick={(e) => startEditing(e, chat)}>
                                   <Pencil size={14} /> Rename
                                 </button>
-                                <button 
+                                <button
                                   onClick={(e) => deleteChat(e, chat.id)}
-                                  style={{ color: '#ef4444' }} 
+                                  style={{ color: 'var(--brand)' }}
                                 >
                                   <Trash2 size={14} /> Delete
                                 </button>
@@ -203,9 +222,17 @@ export default function Page() {
             </div>
 
           ) : (
-            <BookingsWorkspace onBookRoom={() => setActiveTab('chat')} />
+            <BookingsWorkspace
+              onBookRoom={() => setActiveTab('chat')}
+              onCloseDrawer={() => setDrawerOpen(false)}
+            />
           )}
         </main>
+
+        <div
+          className={`drawer-overlay ${drawerOpen ? 'open' : ''}`}
+          onClick={() => setDrawerOpen(false)}
+        />
       </div>
     </>
   );

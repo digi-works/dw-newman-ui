@@ -1,11 +1,19 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, List, Calendar as CalendarIcon, CheckCircle2, Clock, XCircle, Building2 } from 'lucide-react';
 
 interface BookingsWorkspaceProps {
   onBookRoom: () => void;
+  onCloseDrawer?: () => void;
 }
+
+const VIEW_META: Record<FilterType, [string, string]> = {
+  pending: ['Awaiting approval', 'Requests routed to the Facilities Office for a decision.'],
+  all: ['All bookings', 'Every room request across campus this term.'],
+  upcoming: ['Upcoming', 'Bookings scheduled from today onward.'],
+  confirmed: ['Confirmed', 'Approved bookings with calendar invites sent.'],
+  rejected: ['Declined', 'Requests turned down, with the reason recorded.'],
+};
 
 interface Booking {
   id: string;
@@ -20,11 +28,16 @@ interface Booking {
 
 type FilterType = 'all' | 'upcoming' | 'confirmed' | 'pending' | 'rejected';
 
-export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
+export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspaceProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>('all');
+
+  const pickFilter = (next: FilterType) => {
+    setFilter(next);
+    onCloseDrawer?.();
+  };
 
   const fetchBookings = async () => {
     setIsLoading(true);
@@ -113,40 +126,30 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
     <section className="bookings-workspace">
       {/* Sidebar Navigation */}
       <aside className="bookings-sidebar">
-        <h3 className="bookings-sidebar-title">Manage Views</h3>
-        
-        <button className={`bookings-nav-item ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
-          <div className="bookings-nav-left">
-            <List size={16} style={{ color: '#7c3aed' }} /> All Bookings
-          </div>
-          <span className="bookings-badge">{stats.all}</span>
-        </button>
+        <h3 className="bookings-sidebar-title">Queues</h3>
 
-        <button className={`bookings-nav-item ${filter === 'upcoming' ? 'active' : ''}`} onClick={() => setFilter('upcoming')}>
-          <div className="bookings-nav-left">
-            <CalendarIcon size={16} style={{ color: '#3b82f6' }} /> Upcoming
-          </div>
-          <span className="bookings-badge">{stats.upcoming}</span>
-        </button>
-
-        <button className={`bookings-nav-item ${filter === 'confirmed' ? 'active' : ''}`} onClick={() => setFilter('confirmed')}>
-          <div className="bookings-nav-left">
-            <CheckCircle2 size={16} style={{ color: '#10b981' }} /> Confirmed
-          </div>
-          <span className="bookings-badge">{stats.confirmed}</span>
-        </button>
-
-        <button className={`bookings-nav-item ${filter === 'pending' ? 'active' : ''}`} onClick={() => setFilter('pending')}>
-          <div className="bookings-nav-left">
-            <Clock size={16} style={{ color: '#f59e0b' }} /> Tentative
-          </div>
+        <button className={`bookings-nav-item ${filter === 'pending' ? 'active' : ''}`} onClick={() => pickFilter('pending')}>
+          <div className="bookings-nav-left"><span>Awaiting approval</span></div>
           <span className="bookings-badge">{stats.pending}</span>
         </button>
 
-        <button className={`bookings-nav-item ${filter === 'rejected' ? 'active' : ''}`} onClick={() => setFilter('rejected')}>
-          <div className="bookings-nav-left">
-            <XCircle size={16} style={{ color: '#ef4444' }} /> Declined
-          </div>
+        <button className={`bookings-nav-item ${filter === 'all' ? 'active' : ''}`} onClick={() => pickFilter('all')}>
+          <div className="bookings-nav-left"><span>All bookings</span></div>
+          <span className="bookings-badge">{stats.all}</span>
+        </button>
+
+        <button className={`bookings-nav-item ${filter === 'upcoming' ? 'active' : ''}`} onClick={() => pickFilter('upcoming')}>
+          <div className="bookings-nav-left"><span>Upcoming</span></div>
+          <span className="bookings-badge">{stats.upcoming}</span>
+        </button>
+
+        <button className={`bookings-nav-item ${filter === 'confirmed' ? 'active' : ''}`} onClick={() => pickFilter('confirmed')}>
+          <div className="bookings-nav-left"><span>Confirmed</span></div>
+          <span className="bookings-badge">{stats.confirmed}</span>
+        </button>
+
+        <button className={`bookings-nav-item ${filter === 'rejected' ? 'active' : ''}`} onClick={() => pickFilter('rejected')}>
+          <div className="bookings-nav-left"><span>Declined</span></div>
           <span className="bookings-badge">{stats.rejected}</span>
         </button>
       </aside>
@@ -154,17 +157,20 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
       {/* Main Content Area */}
       <div className="bookings-main">
         <div className="dashboard-header">
-          <h2 className="dashboard-title">
-            {filter.charAt(0).toUpperCase() + filter.slice(1)} Bookings
-          </h2>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button 
-              onClick={fetchBookings} 
-              className="nav-btn" 
-              style={{ background: 'var(--input-bg)', border: '1px solid var(--border-color)' }}
+          <div>
+            <h1 className="dashboard-title">{VIEW_META[filter][0]}</h1>
+            <p className="bookings-subtitle">{VIEW_META[filter][1]}</p>
+          </div>
+          <div className="bookings-tools">
+            <button type="button" className="bookings-tool">Export</button>
+            <button
+              type="button"
+              onClick={fetchBookings}
+              className="bookings-tool"
               title="Refresh data"
+              disabled={isLoading}
             >
-              <RefreshCw size={16} className={isLoading ? "spin-animation" : ""} />
+              {isLoading ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
         </div>
@@ -173,9 +179,9 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
           <div className="table-header-row">
             <h3>Booking Details</h3>
           </div>
-          
+
           {error ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444' }}>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--brand)' }}>
               <p>Error loading database. Check your NeonDB string.</p>
               <p style={{ fontSize: '12px', marginTop: '8px' }}>{error}</p>
             </div>
@@ -201,29 +207,19 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
               <tbody>
                 {filteredBookings.map((booking) => {
                   const safeStatus = (booking.status || 'pending').toLowerCase();
-                  
-                  let displayStatus = safeStatus.charAt(0).toUpperCase() + safeStatus.slice(1);
-                  let StatusIcon = Clock;
-                  
+
+                  let displayStatus = 'Tentative';
                   if (safeStatus === 'confirmed' || safeStatus === 'accepted' || safeStatus === 'approved') {
-                    StatusIcon = CheckCircle2;
                     displayStatus = 'Confirmed';
                   } else if (safeStatus === 'rejected' || safeStatus === 'declined') {
-                    StatusIcon = XCircle;
                     displayStatus = 'Declined';
-                  } else {
-                    StatusIcon = Clock;
-                    displayStatus = 'Tentative';
                   }
-                  
+
                   return (
                     <tr key={booking.id}>
                       <td>
                         <div className="room-cell">
-                          <div className="room-icon">
-                            <Building2 size={16} />
-                          </div>
-                          {booking.room_name || booking.room_id || 'Unknown Room'}
+                          <span>{booking.room_name || booking.room_id || 'Unknown Room'}</span>
                         </div>
                       </td>
                       <td>
@@ -239,7 +235,6 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
                       <td>{booking.purpose || 'No purpose provided'}</td>
                       <td>
                         <div className={`status-badge status-${displayStatus.toLowerCase()}`}>
-                          <StatusIcon size={14} />
                           {displayStatus}
                         </div>
                       </td>
