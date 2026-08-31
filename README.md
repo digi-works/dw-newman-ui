@@ -2,7 +2,7 @@
 
 A production-grade, AI-powered campus assistant built for Newman University. This application features a dual-workspace design: a conversational AI interface powered by Flowise, and a real-time Room Bookings dashboard connected to NeonDB (PostgreSQL).
 
-## ✨ Features
+## Features
 
 * **Dual Workspace Layout**: Seamlessly toggle between the AI Chat and the Bookings Dashboard.
 * **Flowise AI Integration**: Real-time streaming AI responses with a custom `ChatWorkspace` component.
