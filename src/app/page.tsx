@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import BookingsWorkspace from '@/components/BookingsWorkspace';
 import ChatWorkspace from '@/components/ChatWorkspace';
-import { CopilotKit } from "@copilotkit/react-core";
 import { RegisterBookingsTable } from "@/components/action-renderers";
 import type { ChatSession } from '@/types';
 
@@ -90,7 +89,7 @@ export default function Page() {
   };
 
   return (
-    <CopilotKit runtimeUrl="/api/copilotkit">
+    <>
       <RegisterBookingsTable />
       
       <div className={`app-wrapper ${isDark ? 'dark-theme' : ''}`}>
@@ -208,6 +207,6 @@ export default function Page() {
           )}
         </main>
       </div>
-    </CopilotKit>
+    </>
   );
 }
