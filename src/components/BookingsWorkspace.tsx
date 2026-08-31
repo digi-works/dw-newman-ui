@@ -65,7 +65,7 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
     setSelectedBooking(null); // Close the email widget if open
     setConfirmDialog(null);   // Close the confirmation modal
     
-    // Send the permanent update to the database
+    // Send the permanent update to the database (and sync with digiviahire@gmail.com backend handlers)
     try {
       const res = await fetch(`/api/bookings/${id}`, { 
         method: 'PATCH', 
@@ -144,18 +144,18 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
       <aside className="bookings-sidebar">
         <h3 className="bookings-sidebar-title">Manage Views</h3>
 
-        <button className={`bookings-nav-item ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
-          <div className="bookings-nav-left">
-            <List size={16} style={{ color: '#7c3aed' }} /> All Bookings
-          </div>
-          <span className="bookings-badge">{stats.all}</span>
-        </button>
-
         <button className={`bookings-nav-item ${filter === 'awaiting' ? 'active' : ''}`} onClick={() => setFilter('awaiting')}>
           <div className="bookings-nav-left">
             <Inbox size={16} style={{ color: '#ec4899' }} /> Awaiting Approvals
           </div>
           <span className="bookings-badge">{stats.awaiting}</span>
+        </button>
+
+        <button className={`bookings-nav-item ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
+          <div className="bookings-nav-left">
+            <List size={16} style={{ color: '#7c3aed' }} /> All Bookings
+          </div>
+          <span className="bookings-badge">{stats.all}</span>
         </button>
         
         <button className={`bookings-nav-item ${filter === 'upcoming' ? 'active' : ''}`} onClick={() => setFilter('upcoming')}>
@@ -276,7 +276,6 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
                       
                       {/* INLINE APPROVE/DECLINE BUTTONS FOR THE TABLE ROW */}
                       <td>
-                        {/* ONLY SHOW BUTTONS IF IN THE 'AWAITING' TAB */}
                         {filter === 'awaiting' && ['pending', 'tentative'].includes(safeStatus) ? (
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <button 
@@ -357,7 +356,6 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
             </div>
           </div>
           
-          {/* ONLY SHOW WIDGET ACTIONS IF IN THE 'AWAITING' TAB */}
           {filter === 'awaiting' && ['pending', 'tentative'].includes((selectedBooking.status || 'pending').toLowerCase()) && (
              <div className="email-widget-footer">
                <button 
@@ -383,12 +381,9 @@ export default function BookingsWorkspace({}: BookingsWorkspaceProps) {
         </div>
       )}
       
-      {/* Existing Overlay for the Email Widget Fullscreen mode */}
       {selectedBooking && isFullScreen && <div className="modal-overlay" onClick={() => setIsFullScreen(false)} />}
 
-      {/* ========================================================================= */}
-      {/* NEW CONFIRMATION MODAL                                                    */}
-      {/* ========================================================================= */}
+      {/* CONFIRMATION SAFETY MODAL */}
       {confirmDialog && (
         <>
           <div className="modal-overlay" style={{ zIndex: 10001 }} onClick={() => setConfirmDialog(null)} />
