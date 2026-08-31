@@ -24,7 +24,7 @@ export async function GET() {
     return NextResponse.json({ buildings: buildingsList });
 
   } catch (error: any) {
-    console.error("🔥 NEON DB ERROR (Buildings):", error.message);
+    console.error("NEON DB ERROR (Buildings):", error.message);
     return NextResponse.json(
       { error: "Failed to fetch buildings from the database.", details: error.message }, 
       { status: 500 }

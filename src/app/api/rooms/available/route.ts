@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     
     if (!date || !startTime || !endTime) {
       return NextResponse.json(
-        { error: "Missing required date or time parameters." }, 
+        { error: "Missing Required date or time parameters." }, 
         { status: 400 }
       );
     }
