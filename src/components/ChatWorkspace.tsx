@@ -70,14 +70,11 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     };
   };
 
-  // ==========================================
-  // ADVANCED MARKDOWN TEXT RENDERER
-  // ==========================================
   const renderFormattedText = (text: string, hideBookingList: boolean = false) => {
     let cleanText = text;
     
     if (hideBookingList) {
-      const splitMatch = text.match(/(I still need|Please reply|1\.|Please send|Please provide|Your details|To book this|For the booking|Please share|I'll need|I will need|Fill out|Fill in|Enter your|Details for|I need a couple details|Full name|Name:)/i);
+      const splitMatch = text.match(/(I still need|Please reply|1\.|Please send|Please provide|Your details|To book this|For the booking|Please share|I'll need|I will need|Fill out|Fill in|Enter your|Details for|I need a couple details|Full name|Name:|Please tell me)/i);
       if (splitMatch && splitMatch.index !== undefined) {
         cleanText = text.substring(0, splitMatch.index).trim();
       }
@@ -88,7 +85,6 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     let inCodeBlock = false;
     let codeContent: string[] = [];
 
-    // THE FIX: Changed 'var(--text-main)' to 'inherit' so bold text matches the bubble color
     const parseInlineFormat = (str: string) => {
       const parts = str.split('**');
       return parts.map((part, pIdx) => {
@@ -146,7 +142,6 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
       }
 
       if (isList) {
-        // THE FIX: Changed 'var(--text-main)' to 'inherit' for list items
         renderedElements.push(
           <div key={`li-${i}`} style={{ display: 'flex', gap: '8px', marginBottom: '8px', paddingLeft: '8px' }}>
             <span style={{ color: '#7c3aed', fontSize: '16px', lineHeight: '1.4' }}>•</span>
@@ -156,7 +151,6 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
           </div>
         );
       } else {
-        // THE FIX: Changed 'var(--text-main)' to 'inherit' for paragraphs
         renderedElements.push(
           <p key={`p-${i}`} style={{ marginBottom: '8px', lineHeight: '1.5', color: 'inherit' }}>
             {parseInlineFormat(cleanLine)}
@@ -177,7 +171,6 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
 
     return renderedElements;
   };
-  // ==========================================
 
   const submitMessage = async (textToSend: string) => {
     if (!textToSend.trim() || isLoading) return;
@@ -260,68 +253,105 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     }
   };
 
+  // ==========================================
+  // REAL-TIME 2-STEP BOOKING DETAILS FORM
+  // ==========================================
   const BookingDetailsForm = ({ aiMessage }: { aiMessage: string }) => {
     const [step, setStep] = useState(1);
     
+    // Step 1 State (Requirements)
     const [purpose, setPurpose] = useState('');
     const [date, setDate] = useState('');
-    const [building, setBuilding] = useState('No preference');
-    
-    const [availableSlots, setAvailableSlots] = useState<string[]>([]);
-    const [isFetchingSlots, setIsFetchingSlots] = useState(false);
-    
-    const [timeMode, setTimeMode] = useState(''); 
-    const [customStart, setCustomStart] = useState('');
-    const [customEnd, setCustomEnd] = useState('');
-
+    const [startTime, setStartTime] = useState('');
+    const [endTime, setEndTime] = useState('');
     const [people, setPeople] = useState(12);
+    const [building, setBuilding] = useState('No preference');
     const [needs, setNeeds] = useState<string[]>([]);
     
+    // Dynamic Buildings State
+    const [dbBuildings, setDbBuildings] = useState<string[]>([]);
+    const [isFetchingBuildings, setIsFetchingBuildings] = useState(true);
+
+    // Step 2 State (DB Fetched Rooms & Personal Details)
+    const [availableRooms, setAvailableRooms] = useState<string[]>([]);
+    const [isFetchingRooms, setIsFetchingRooms] = useState(false);
+    const [selectedRoom, setSelectedRoom] = useState('');
+    const [roomMessage, setRoomMessage] = useState('');
+
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [studentId, setStudentId] = useState('');
     const [phone, setPhone] = useState('');
 
+    // Fetch unique buildings on form load
     useEffect(() => {
-      if (date) {
-        setIsFetchingSlots(true);
-        setTimeMode(''); 
-        fetch(`/api/availability?date=${encodeURIComponent(date)}&building=${encodeURIComponent(building)}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data && Array.isArray(data.slots)) {
-              setAvailableSlots(data.slots);
-            } else {
-              setAvailableSlots(["09:00 AM - 10:30 AM", "11:00 AM - 12:30 PM", "02:00 PM - 04:00 PM"]);
-            }
-          })
-          .catch((err) => {
-            console.error("API Error:", err);
-            setAvailableSlots(["09:00 AM - 10:30 AM", "11:00 AM - 12:30 PM", "02:00 PM - 04:00 PM"]);
-          })
-          .finally(() => {
-            setIsFetchingSlots(false);
-          });
-      } else {
-        setAvailableSlots([]);
-        setTimeMode('');
-      }
-    }, [date, building]);
+      fetch('/api/buildings')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.buildings) {
+            setDbBuildings(data.buildings);
+          }
+        })
+        .catch(err => console.error("Failed to fetch buildings:", err))
+        .finally(() => setIsFetchingBuildings(false));
+    }, []);
 
     const toggleNeed = (need: string) => {
       setNeeds(prev => prev.includes(need) ? prev.filter(n => n !== need) : [...prev, need]);
     };
 
-    const handleSubmit = () => {
-      const finalTimeSlot = timeMode === 'custom' 
-        ? `${customStart} to ${customEnd}` 
-        : timeMode;
+    const handleFindRooms = async () => {
+      setStep(2);
+      setIsFetchingRooms(true);
+      setSelectedRoom('');
+      setRoomMessage('');
 
+      try {
+        const params = new URLSearchParams({
+          date: date,
+          startTime: startTime,
+          endTime: endTime,
+          capacity: people.toString(),
+          building: building,
+          needs: needs.join(',')
+        });
+
+        const res = await fetch(`/api/rooms/available?${params.toString()}`);
+        
+        if (!res.ok) throw new Error("API request failed");
+        
+        const data = await res.json();
+        
+        if (data.exactMatches && data.exactMatches.length > 0) {
+          setAvailableRooms(data.exactMatches);
+          setRoomMessage("✓ Found exact matches for your requested time!");
+        } else if (data.alternatives && data.alternatives.length > 0) {
+          setAvailableRooms(data.alternatives);
+          setRoomMessage("ℹ No exact matches found, but here are some available alternatives nearby:");
+        } else if (data.rooms && data.rooms.length > 0) {
+          setAvailableRooms(data.rooms);
+          setRoomMessage("✓ Here are the available rooms:");
+        } else {
+          setAvailableRooms([]);
+          setRoomMessage("⚠ No rooms match your exact requirements.");
+        }
+      } catch (error) {
+        console.error("Real database fetch failed:", error);
+        setAvailableRooms([]);
+        setRoomMessage("⚠ Unable to fetch live availability from the database.");
+      } finally {
+        setIsFetchingRooms(false);
+      }
+    };
+
+    const handleSubmit = () => {
       const payload = {
         action: "submit_booking_request",
+        room: selectedRoom,
         purpose: purpose.trim(),
         date: date,
-        timeSlot: finalTimeSlot,
+        startTime: startTime,
+        endTime: endTime,
         attendees: people,
         building: building,
         needs: needs,
@@ -335,9 +365,8 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
       submitMessage(finalString);
     };
 
-    const isTimeValid = timeMode === 'custom' ? (customStart && customEnd) : timeMode !== '';
-    const isStep1Complete = purpose.trim() && date && isTimeValid;
-    const isStep2Complete = name.trim() && email.trim() && studentId.trim();
+    const isStep1Complete = purpose.trim() && date && startTime && endTime;
+    const isStep2Complete = selectedRoom && name.trim() && email.trim() && studentId.trim();
 
     return (
       <div className="booking-form-card">
@@ -354,43 +383,20 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                 <input type="text" className="booking-input" placeholder="e.g. Book club discussion" value={purpose} onChange={e => setPurpose(e.target.value)} />
               </div>
 
-              <div className="form-grid-2">
+              <div className="form-grid-3">
                 <div className="booking-form-row">
                   <label>Date</label>
                   <input type="date" className="booking-input" value={date} onChange={e => setDate(e.target.value)} />
                 </div>
                 <div className="booking-form-row">
-                  <label>Time Slot</label>
-                  <select 
-                    className="booking-input" 
-                    value={timeMode} 
-                    onChange={e => setTimeMode(e.target.value)}
-                    disabled={isFetchingSlots || !date}
-                  >
-                    <option value="">
-                      {isFetchingSlots ? "Checking availability..." : (date ? "Select a time slot" : "Select date first")}
-                    </option>
-                    {availableSlots.map(slot => (
-                      <option key={slot} value={slot}>{slot}</option>
-                    ))}
-                    <option disabled>──────────</option>
-                    <option value="custom">Custom specific time...</option>
-                  </select>
+                  <label>Start</label>
+                  <input type="time" className="booking-input" value={startTime} onChange={e => setStartTime(e.target.value)} />
+                </div>
+                <div className="booking-form-row">
+                  <label>End</label>
+                  <input type="time" className="booking-input" value={endTime} onChange={e => setEndTime(e.target.value)} />
                 </div>
               </div>
-
-              {timeMode === 'custom' && (
-                <div className="form-grid-2" style={{ marginTop: '-8px' }}>
-                  <div className="booking-form-row">
-                    <label style={{ color: '#7c3aed' }}>Start Time</label>
-                    <input type="time" className="booking-input" style={{ borderColor: '#7c3aed' }} value={customStart} onChange={e => setCustomStart(e.target.value)} />
-                  </div>
-                  <div className="booking-form-row">
-                    <label style={{ color: '#7c3aed' }}>End Time</label>
-                    <input type="time" className="booking-input" style={{ borderColor: '#7c3aed' }} value={customEnd} onChange={e => setCustomEnd(e.target.value)} />
-                  </div>
-                </div>
-              )}
 
               <div className="form-grid-2">
                 <div className="booking-form-row">
@@ -405,13 +411,18 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                 </div>
                 <div className="booking-form-row">
                   <label>Preferred building</label>
-                  <select className="booking-input" value={building} onChange={e => setBuilding(e.target.value)}>
-                    <option value="No preference">No preference</option>
-                    <option value="DeMattias Hall">DeMattias Hall</option>
-                    <option value="Dugan Library">Dugan Library</option>
-                    <option value="Eck Hall">Eck Hall</option>
-                    <option value="Sacred Heart Hall">Sacred Heart Hall</option>
-                    <option value="Bishop Gerber Science Center">Bishop Gerber Science Center</option>
+                  <select 
+                    className="booking-input" 
+                    value={building} 
+                    onChange={e => setBuilding(e.target.value)}
+                    disabled={isFetchingBuildings}
+                  >
+                    <option value="No preference">
+                      {isFetchingBuildings ? "Loading buildings..." : "No preference"}
+                    </option>
+                    {dbBuildings.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -432,13 +443,58 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
               </div>
 
               <div className="step-actions">
-                <button className="booking-submit-btn" disabled={!isStep1Complete} onClick={() => setStep(2)}>
-                  Continue to Step 2
+                <button className="booking-submit-btn" disabled={!isStep1Complete} onClick={handleFindRooms}>
+                  Find Available Rooms
                 </button>
               </div>
             </>
           ) : (
             <>
+              <div className="booking-form-row" style={{ marginBottom: '8px' }}>
+                <label style={{ color: '#7c3aed' }}>Select an Available Room</label>
+                
+                {roomMessage && (
+                  <div style={{ 
+                    fontSize: '13px', 
+                    fontWeight: 500,
+                    color: availableRooms.length > 0 ? '#10b981' : '#ef4444', 
+                    marginBottom: '8px',
+                    background: availableRooms.length > 0 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+                    padding: '8px 12px',
+                    borderRadius: '6px'
+                  }}>
+                    {roomMessage}
+                  </div>
+                )}
+
+                <select 
+                  className="booking-input" 
+                  value={selectedRoom} 
+                  onChange={e => setSelectedRoom(e.target.value)}
+                  disabled={isFetchingRooms || availableRooms.length === 0}
+                  style={{ borderColor: '#7c3aed' }}
+                >
+                  <option value="">
+                    {isFetchingRooms ? "Searching live database..." : (availableRooms.length > 0 ? "Choose a matching room" : "No rooms found")}
+                  </option>
+                  {availableRooms.map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+
+                {availableRooms.length === 0 && !isFetchingRooms && (
+                   <button 
+                     className="btn-secondary" 
+                     style={{ marginTop: '12px', width: '100%', borderColor: '#7c3aed', color: '#7c3aed' }} 
+                     onClick={() => {
+                        submitMessage(`I need a room for ${people} people in ${building} on ${date} from ${startTime} to ${endTime}, but the database says nothing is available. Can you help me find alternative dates, times, or buildings?`);
+                     }}
+                   >
+                      Ask Assistant for alternatives
+                   </button>
+                )}
+              </div>
+
               <div className="booking-form-row">
                 <label>Full Name</label>
                 <input type="text" className="booking-input" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} />
@@ -479,17 +535,30 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
   const lastMsg = activeChat.messages[activeChat.messages.length - 1];
   if (lastMsg && lastMsg.role === 'ai') {
     const contentLower = lastMsg.content.toLowerCase();
+    
     const hasStudentId = contentLower.includes('student id');
     const hasEmail = contentLower.includes('email');
     const hasFullName = contentLower.includes('full name') || contentLower.includes('your name') || contentLower.includes('name:');
     
-    const isRequesting = contentLower.includes('need') || contentLower.includes('provide') || contentLower.includes('fill') || contentLower.includes('complete') || contentLower.includes('details');
-    const isConfirmation = contentLower.includes('successfully') || contentLower.includes('confirmed') || contentLower.includes('booked');
+    const asksForPersonal = hasStudentId && (hasEmail || hasFullName);
+    const asksForRoomDetails = (contentLower.includes('what is it for') || contentLower.includes('how many people')) && 
+                               (contentLower.includes('date') || contentLower.includes('time'));
     
+    const isRequesting = contentLower.includes('need') || 
+                         contentLower.includes('provide') || 
+                         contentLower.includes('fill') || 
+                         contentLower.includes('complete') ||
+                         contentLower.includes('details') ||
+                         contentLower.includes('tell me');
+                         
+    const isConfirmation = contentLower.includes('successfully') || 
+                           contentLower.includes('confirmed') || 
+                           (contentLower.includes('booked') && !contentLower.includes('need to book'));
+                           
     const prevMsg = activeChat.messages.length > 1 ? activeChat.messages[activeChat.messages.length - 2] : null;
     const justSubmittedForm = prevMsg?.role === 'user' && prevMsg.content.includes('```json');
     
-    isWaitingForForm = hasStudentId && (hasEmail || hasFullName) && isRequesting && !isConfirmation && !justSubmittedForm;
+    isWaitingForForm = (asksForPersonal || asksForRoomDetails) && isRequesting && !isConfirmation && !justSubmittedForm;
   }
 
   return (
@@ -550,26 +619,31 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
               const isCurrentLoading = isLoading && msg.role === 'ai' && index === activeChat.messages.length - 1;
               
               const contentLower = msg.content.toLowerCase();
+              
               const hasStudentId = contentLower.includes('student id');
               const hasEmail = contentLower.includes('email');
               const hasFullName = contentLower.includes('full name') || contentLower.includes('your name') || contentLower.includes('name:');
+              
+              const asksForPersonal = hasStudentId && (hasEmail || hasFullName);
+              const asksForRoomDetails = (contentLower.includes('what is it for') || contentLower.includes('how many people')) && 
+                                         (contentLower.includes('date') || contentLower.includes('time'));
               
               const isRequesting = contentLower.includes('need') || 
                                    contentLower.includes('provide') || 
                                    contentLower.includes('fill') || 
                                    contentLower.includes('complete') ||
-                                   contentLower.includes('details');
+                                   contentLower.includes('details') ||
+                                   contentLower.includes('tell me');
                                    
               const isConfirmation = contentLower.includes('successfully') || 
                                      contentLower.includes('confirmed') || 
-                                     contentLower.includes('booked');
+                                     (contentLower.includes('booked') && !contentLower.includes('need to book'));
                                      
               const prevMsg = index > 0 ? activeChat.messages[index - 1] : null;
               const justSubmittedForm = prevMsg?.role === 'user' && prevMsg.content.includes('```json');
               
               const isBookingForm = msg.role === 'ai' && 
-                                    hasStudentId && 
-                                    (hasEmail || hasFullName) && 
+                                    (asksForPersonal || asksForRoomDetails) && 
                                     isRequesting && 
                                     !isConfirmation && 
                                     !justSubmittedForm;
