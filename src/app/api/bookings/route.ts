@@ -22,7 +22,7 @@ export async function GET() {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to load bookings from Postgres";
-    console.error("Error fetching bookings from Database:", err);
+    console.error("Error fetching bookings from Neon:", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
