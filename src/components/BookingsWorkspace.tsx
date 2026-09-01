@@ -81,19 +81,17 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
     setSelectedBooking(null); // Close the email widget if open
     setConfirmDialog(null);   // Close the confirmation modal
     
-    // Send the permanent update to the database (and sync with digiviahire@gmail.com backend handlers)
+    // Send to your Digiworks automation instead of the local Next.js route
     try {
-      const res = await fetch(`/api/bookings/${id}`, { 
-        method: 'PATCH', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: type }) 
+      const res = await fetch(`https://ap.digiworks.ai/api/v1/webhooks/9nCrG8NXMFE5jpiEuuVdE?status=${type}&booking_id=${id}`, { 
+        method: 'GET'
       });
       
       if (!res.ok) {
-        console.error("Failed to update status in database");
+        console.error("Failed to update status via Digiworks webhook");
       }
     } catch (error) {
-      console.error("Error calling PATCH route:", error);
+      console.error("Error calling Digiworks webhook:", error);
     }
   };
 
