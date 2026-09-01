@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Calendar, Trophy, MapPin } from 'lucide-react';
 import { streamFlowiseChat } from '../flowise';
 import type { ChatSession } from '../types';
 
@@ -30,11 +29,12 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
   }, [activeChat.messages]);
 
   const now = new Date();
-  const dateString = now.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase();
+  const dateString = `${now.toLocaleDateString('en-GB', { weekday: 'long' })}, ${now.getDate()} ${now.toLocaleDateString('en-GB', { month: 'long' })}`;
   const hour = now.getHours();
-  let greetingTime = "Good evening.";
-  if (hour < 12) greetingTime = "Good morning.";
-  else if (hour < 17) greetingTime = "Good afternoon.";
+  let greetingTime = "Good evening";
+  if (hour < 12) greetingTime = "Good morning";
+  else if (hour < 17) greetingTime = "Good afternoon";
+  const greeting = `${greetingTime}, Jordan.`;
 
   const parseThoughtAndAnswer = (rawText: string) => {
     const thoughtKeywords = ["Checking", "Searching", "Thinking", "Analyzing", "Evaluating", "Looking up"];
@@ -144,7 +144,7 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
       if (isList) {
         renderedElements.push(
           <div key={`li-${i}`} style={{ display: 'flex', gap: '8px', marginBottom: '8px', paddingLeft: '8px' }}>
-            <span style={{ color: '#7c3aed', fontSize: '16px', lineHeight: '1.4' }}>•</span>
+            <span style={{ color: 'var(--brand)', fontSize: '16px', lineHeight: '1.4' }}>•</span>
             <div style={{ flex: 1, lineHeight: '1.5', color: 'inherit' }}>
               {parseInlineFormat(cleanLine)}
             </div>
@@ -404,7 +404,7 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                   <div className="number-stepper">
                     <span className="stepper-value">{people}</span>
                     <div className="stepper-controls">
-                      <button className="stepper-btn" onClick={() => setPeople(p => Math.max(1, p - 1))}>-</button>
+                      <button className="stepper-btn" onClick={() => setPeople(p => Math.max(1, p - 1))}>−</button>
                       <button className="stepper-btn" onClick={() => setPeople(p => p + 1)}>+</button>
                     </div>
                   </div>
@@ -451,15 +451,15 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
           ) : (
             <>
               <div className="booking-form-row" style={{ marginBottom: '8px' }}>
-                <label style={{ color: '#7c3aed' }}>Select an Available Room</label>
-                
+                <label style={{ color: 'var(--brand)' }}>Select an Available Room</label>
+
                 {roomMessage && (
-                  <div style={{ 
-                    fontSize: '13px', 
+                  <div style={{
+                    fontSize: '13px',
                     fontWeight: 500,
-                    color: availableRooms.length > 0 ? '#10b981' : '#ef4444', 
+                    color: availableRooms.length > 0 ? 'var(--green)' : 'var(--brand)',
                     marginBottom: '8px',
-                    background: availableRooms.length > 0 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+                    background: availableRooms.length > 0 ? 'var(--green-tint)' : 'var(--brand-tint)',
                     padding: '8px 12px',
                     borderRadius: '6px'
                   }}>
@@ -467,12 +467,12 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                   </div>
                 )}
 
-                <select 
-                  className="booking-input" 
-                  value={selectedRoom} 
+                <select
+                  className="booking-input"
+                  value={selectedRoom}
                   onChange={e => setSelectedRoom(e.target.value)}
                   disabled={isFetchingRooms || availableRooms.length === 0}
-                  style={{ borderColor: '#7c3aed' }}
+                  style={{ borderColor: 'var(--brand)' }}
                 >
                   <option value="">
                     {isFetchingRooms ? "Searching live database..." : (availableRooms.length > 0 ? "Choose a matching room" : "No rooms found")}
@@ -485,7 +485,7 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                 {availableRooms.length === 0 && !isFetchingRooms && (
                    <button 
                      className="btn-secondary" 
-                     style={{ marginTop: '12px', width: '100%', borderColor: '#7c3aed', color: '#7c3aed' }} 
+                     style={{ marginTop: '12px', width: '100%', borderColor: 'var(--brand)', color: 'var(--brand)' }}
                      onClick={() => {
                         submitMessage(`I need a room for ${people} people in ${building} on ${date} from ${startTime} to ${endTime}, but the database says nothing is available. Can you help me find alternative dates, times, or buildings?`);
                      }}
@@ -567,49 +567,66 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
         {isFirstMessage ? (
           
           <div className="empty-state-container">
-            <div className="empty-state-date">
-              <div className="date-dot" /> {dateString}
-            </div>
-            
-            <h1 className="empty-state-greeting">{greetingTime}</h1>
-            
-            <p className="empty-state-subtitle">
-              Three specialists work behind this box, reading live campus schedules, fixtures and room availability.
-            </p>
+            <div className="empty-state-inner">
+              <div className="empty-state-date">
+                <div className="date-dot" /> {dateString}
+              </div>
 
-            <div className="suggestion-cards-grid">
-              <button 
-                className="suggestion-card" 
-                onClick={() => submitMessage("Find what's on this week and send me the invite.")}
-              >
-                <div className="card-icon-wrapper" style={{ background: 'transparent', color: '#7c3aed', justifyContent: 'flex-start' }}>
-                  <Calendar size={22} strokeWidth={2}/>
-                </div>
-                <div className="card-title">Campus events</div>
-                <div className="card-text">Find what's on this week and send me the invite.</div>
-              </button>
+              <h1 className="empty-state-greeting">{greeting}</h1>
 
-              <button 
-                className="suggestion-card" 
-                onClick={() => submitMessage("Are there any home games for the Jets? Add them to my calendar.")}
-              >
-                <div className="card-icon-wrapper" style={{ background: 'transparent', color: '#7c3aed', justifyContent: 'flex-start' }}>
-                  <Trophy size={22} strokeWidth={2}/>
-                </div>
-                <div className="card-title">Athletics fixtures</div>
-                <div className="card-text">Home games for the Jets, added to my calendar.</div>
-              </button>
+              <p className="empty-state-subtitle">
+                Three specialists work behind this box, reading live campus schedules, fixtures and room availability.
+              </p>
 
-              <button 
-                className="suggestion-card" 
-                onClick={() => submitMessage("I need to book a space for a class, club, or study group.")}
-              >
-                <div className="card-icon-wrapper" style={{ background: 'transparent', color: '#7c3aed', justifyContent: 'flex-start' }}>
-                  <MapPin size={22} strokeWidth={2}/>
+              <div className="welcome-composer">
+                <textarea
+                  rows={1}
+                  wrap="off"
+                  placeholder="Ask Newman Assistant…"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+                <div className="welcome-composer-row">
+                  <button
+                    className="welcome-send"
+                    disabled={!inputText.trim() || isLoading}
+                    onClick={handleInputSend}
+                    aria-label="Send"
+                  >
+                    ↑
+                  </button>
                 </div>
-                <div className="card-title">Reserve a room</div>
-                <div className="card-text">Book space for a class, club or study group.</div>
-              </button>
+              </div>
+
+              <div className="suggestion-cards-grid">
+                <button
+                  className="suggestion-card"
+                  onClick={() => submitMessage("Find what's on this week and send me the invite.")}
+                >
+                  <div className="card-icon-wrapper red" aria-hidden="true">◈</div>
+                  <div className="card-title">Campus events</div>
+                  <div className="card-text">Find what&apos;s on this week and send me the invite.</div>
+                </button>
+
+                <button
+                  className="suggestion-card"
+                  onClick={() => submitMessage("Are there any home games for the Jets? Add them to my calendar.")}
+                >
+                  <div className="card-icon-wrapper navy" aria-hidden="true">◎</div>
+                  <div className="card-title">Athletics fixtures</div>
+                  <div className="card-text">Home games for the Jets, added to my calendar.</div>
+                </button>
+
+                <button
+                  className="suggestion-card"
+                  onClick={() => submitMessage("I need to book a space for a class, club, or study group.")}
+                >
+                  <div className="card-icon-wrapper green" aria-hidden="true">▤</div>
+                  <div className="card-title">Reserve a room</div>
+                  <div className="card-text">Book space for a class, club or study group.</div>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -654,14 +671,14 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                 <div key={msg.id} className={`message-row ${msg.role}`}>
                   
                   {msg.role === 'ai' && (
-                    <img src="/newman-chat.png" alt="Newman AI" className="ai-avatar" />
+                    <div className="ai-avatar">NU</div>
                   )}
                   
                   <div className={`message-bubble ${msg.role}`}>
                     
                     {msg.thought && isCurrentLoading && (
                       <div style={{ marginBottom: '16px' }}>
-                        <strong style={{ color: '#7c3aed', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '6px' }}>
+                        <strong style={{ color: 'var(--brand)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '6px' }}>
                           🎓 Did you know?
                         </strong>
                         <div style={{ fontSize: '14px', color: 'var(--text-main)', marginBottom: '4px', lineHeight: '1.4' }}>
@@ -697,21 +714,34 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
         )}
       </div>
 
-      <div className="input-container">
-        <div className={`input-box ${isWaitingForForm ? 'disabled' : ''}`}>
-          <textarea 
-            rows={1}
-            placeholder={isWaitingForForm ? "Complete the form above to continue..." : "Ask Newman Assistant anything..."}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading || isWaitingForForm}
-          />
-          <button className="send-btn" disabled={!inputText.trim() || isLoading || isWaitingForForm} onClick={handleInputSend}>
-            <ArrowUp size="{18}" strokeWidth="{2.5}"/>
-          </button>
+      {!isFirstMessage && (
+        <div className="input-container">
+          <div className={`input-box ${isWaitingForForm ? 'disabled' : ''}`}>
+            <textarea
+              rows={1}
+              placeholder={isWaitingForForm ? "Complete the form above to continue…" : "Reply to Newman Assistant…"}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading || isWaitingForForm}
+            />
+            <div className="composer-row">
+              <div className="composer-tools">
+                <button type="button" className="composer-tool">Attach</button>
+                <button type="button" className="composer-tool">Campus data</button>
+              </div>
+              <button
+                className="send-btn"
+                disabled={!inputText.trim() || isLoading || isWaitingForForm}
+                onClick={handleInputSend}
+                aria-label="Send"
+              >
+                ↑
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }
