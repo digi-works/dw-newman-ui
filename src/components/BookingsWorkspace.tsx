@@ -269,10 +269,37 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
                         </span>
                       </td>
                       <td>{booking.purpose || 'No purpose provided'}</td>
+                      
+                      {/* INLINE APPROVE/DECLINE BUTTONS FOR THE TABLE ROW */}
                       <td>
-                        <div className={`status-badge status-${displayStatus.toLowerCase()}`}>
-                          {displayStatus}
-                        </div>
+                        {(filter === 'awaiting' || filter === 'pending') && ['pending', 'tentative'].includes(safeStatus) ? (
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <button 
+                              className="btn-decline" 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setConfirmDialog({ id: booking.id, type: 'declined', roomName: booking.room_name || booking.room_id || 'Unknown Room' }); 
+                              }}
+                              style={{ padding: '4px 10px', fontSize: '12px' }}
+                            >
+                              Decline
+                            </button>
+                            <button 
+                              className="btn-approve" 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setConfirmDialog({ id: booking.id, type: 'confirmed', roomName: booking.room_name || booking.room_id || 'Unknown Room' }); 
+                              }}
+                              style={{ padding: '4px 10px', fontSize: '12px' }}
+                            >
+                              Approve
+                            </button>
+                          </div>
+                        ) : (
+                          <div className={`status-badge status-${displayStatus.toLowerCase()}`}>
+                            {displayStatus}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

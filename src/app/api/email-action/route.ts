@@ -5,19 +5,24 @@ import { Pool } from '@neondatabase/serverless';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    const action = searchParams.get('action'); // expects 'confirmed' or 'declined'
+    const id = searchParams.get('id') || searchParams.get('booking_id');
+    const rawStatus = searchParams.get('status') || searchParams.get('action'); 
 
-    if (!id || !action) {
+    if (!id || !rawStatus) {
       return new NextResponse("Missing booking ID or action", { status: 400 });
     }
+
+    // THE FIX: Silently translate the webhook keys to match your Postgres database
+    let action = rawStatus.toLowerCase();
+    if (action === 'approved') action = 'confirmed';
+    if (action === 'rejected') action = 'declined';
 
     const dbUrl = process.env.NEXT_PUBLIC_NEON_DB_URL;
     if (!dbUrl) throw new Error("Database URL missing");
 
     const pool = new Pool({ connectionString: dbUrl });
 
-    // Update the database. This is the EXACT same table your UI reads from.
+    // Update the database using the translated action ('confirmed' or 'declined')
     const { rows } = await pool.query(
       `UPDATE room_booking_details 
        SET status = $1 
@@ -57,6 +62,6 @@ export async function GET(request: Request) {
 
   } catch (error) {
     console.error("Email Webhook Error:", error);
-    return new NextResponse("An error occurred processing your request", { status: 500 });
+    return new NextResponse("An error occurred processing your request.", { status: 500 });
   }
 }

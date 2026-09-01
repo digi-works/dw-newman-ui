@@ -172,7 +172,8 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     return renderedElements;
   };
 
-  const submitMessage = async (textToSend: string) => {
+  // NEW: displayMessage parameter handles what is shown on screen vs what is sent to AI
+  const submitMessage = async (textToSend: string, displayMessage?: string) => {
     if (!textToSend.trim() || isLoading) return;
     
     setIsLoading(true);
@@ -182,9 +183,11 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     const aiMsgId = (Date.now() + 1).toString();
 
     const isFirstMessage = activeChat.messages.length === 0;
+    const contentToDisplay = displayMessage || textToSend;
     let newTitle = activeChat.title;
+    
     if (isFirstMessage && activeChat.title === 'New Chat') {
-      newTitle = textToSend.length > 25 ? textToSend.slice(0, 25) + '...' : textToSend;
+      newTitle = contentToDisplay.length > 25 ? contentToDisplay.slice(0, 25) + '...' : contentToDisplay;
     }
 
     setChats(prev => prev.map(chat => {
@@ -195,7 +198,7 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
           updatedAt: Date.now(),
           messages: [
             ...chat.messages, 
-            { id: userMsgId, role: 'user', content: textToSend },
+            { id: userMsgId, role: 'user', content: contentToDisplay },
             { id: aiMsgId, role: 'ai', content: '', thought: 'Analyzing request...' }
           ]
         };
@@ -362,7 +365,14 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
       };
 
       const finalString = `Here are my details for the booking:\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
-      submitMessage(finalString);
+      
+      // NEW: Create a beautifully formatted string to display in the chat UI
+      let displayString = `Here are my details for the booking:\n- **Room:** ${selectedRoom}\n- **Date:** ${date}\n- **Time:** ${startTime} to ${endTime}\n- **Purpose:** ${purpose.trim()}\n- **Attendees:** ${people}\n- **Name:** ${name.trim()} (${studentId.trim()})\n- **Email:** ${email.trim()}`;
+      if (phone) displayString += `\n- **Phone:** ${phone.trim()}`;
+      if (needs.length > 0) displayString += `\n- **Needs:** ${needs.join(', ')}`;
+
+      // Pass the raw JSON to Flowise, but render the clean string in the UI
+      submitMessage(finalString, displayString);
     };
 
     const isStep1Complete = purpose.trim() && date && startTime && endTime;
@@ -556,7 +566,10 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                            (contentLower.includes('booked') && !contentLower.includes('need to book'));
                            
     const prevMsg = activeChat.messages.length > 1 ? activeChat.messages[activeChat.messages.length - 2] : null;
-    const justSubmittedForm = prevMsg?.role === 'user' && prevMsg.content.includes('```json');
+    
+    // NEW: Allow the UI to know the form was submitted even without the JSON block
+    const justSubmittedForm = prevMsg?.role === 'user' && 
+      (prevMsg.content.includes('```json') || prevMsg.content.includes('Here are my details for the booking:'));
     
     isWaitingForForm = (asksForPersonal || asksForRoomDetails) && isRequesting && !isConfirmation && !justSubmittedForm;
   }
@@ -611,7 +624,7 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
 
                 <button
                   className="suggestion-card"
-                  onClick={() => submitMessage("Are there any home games for the Jets? Add them to my calendar.")}
+                  onClick={() => submitMessage("Find the upcoming athletic events?.")}
                 >
                   <div className="card-icon-wrapper navy" aria-hidden="true">◎</div>
                   <div className="card-title">Athletics fixtures</div>
@@ -657,7 +670,10 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                                      (contentLower.includes('booked') && !contentLower.includes('need to book'));
                                      
               const prevMsg = index > 0 ? activeChat.messages[index - 1] : null;
-              const justSubmittedForm = prevMsg?.role === 'user' && prevMsg.content.includes('```json');
+              
+              // NEW: Match the new form validation string
+              const justSubmittedForm = prevMsg?.role === 'user' && 
+                (prevMsg.content.includes('```json') || prevMsg.content.includes('Here are my details for the booking:'));
               
               const isBookingForm = msg.role === 'ai' && 
                                     (asksForPersonal || asksForRoomDetails) && 
@@ -726,10 +742,6 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
               disabled={isLoading || isWaitingForForm}
             />
             <div className="composer-row">
-              <div className="composer-tools">
-                <button type="button" className="composer-tool">Attach</button>
-                <button type="button" className="composer-tool">Campus data</button>
-              </div>
               <button
                 className="send-btn"
                 disabled={!inputText.trim() || isLoading || isWaitingForForm}
