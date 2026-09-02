@@ -10,7 +10,7 @@ import { RegisterBookingsTable } from "@/components/action-renderers";
 import type { ChatSession } from '@/types';
 
 export default function Page() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'bookings'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'bookings' | 'analytics'>('chat');
   const [isDark, setIsDark] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -122,6 +122,11 @@ export default function Page() {
             <button className={`nav-btn ${activeTab === 'bookings' ? 'active' : ''}`} onClick={() => { setActiveTab('bookings'); setDrawerOpen(false); }}>
               Bookings
             </button>
+            {/* ANALYTICS TAB (disabled for now — uncomment to re-enable)
+            <button className={`nav-btn ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => { setActiveTab('analytics'); setDrawerOpen(false); }}>
+              Analytics
+            </button>
+            */}
           </nav>
 
           <div className="nav-right">
@@ -139,10 +144,10 @@ export default function Page() {
 
         {/* Main Workspace Area */}
         <main className="main-content" data-drawer={drawerOpen ? 'open' : undefined}>
-          {activeTab === 'chat' ? (
-
+          
+          {/* CHAT TAB */}
+          {activeTab === 'chat' && (
             <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-
               <aside className="sidebar">
                 <button className="new-chat-btn" onClick={createNewChat}>
                   <span className="nc-plus" aria-hidden="true">+</span> New conversation
@@ -218,15 +223,24 @@ export default function Page() {
                 activeChatId={activeChatId} 
                 setChats={setChats} 
               />
-
             </div>
+          )}
 
-          ) : (
+          {/* BOOKINGS TAB */}
+          {activeTab === 'bookings' && (
             <BookingsWorkspace
               onBookRoom={() => setActiveTab('chat')}
               onCloseDrawer={() => setDrawerOpen(false)}
             />
           )}
+
+          {/* ANALYTICS TAB (disabled for now — uncomment to re-enable, and re-add
+              `import AnalyticsWorkspace from '@/components/AnalyticsWorkspace';` at the top)
+          {activeTab === 'analytics' && (
+            <AnalyticsWorkspace />
+          )}
+          */}
+
         </main>
 
         <div

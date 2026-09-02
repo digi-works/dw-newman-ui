@@ -33,7 +33,7 @@ interface Booking {
   role?: string;
 }
 
-export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspaceProps) {
+export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: BookingsWorkspaceProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     id: string;
-    type: 'confirmed' | 'declined';
+    type: 'confirmed' | 'rejected';
     roomName: string;
   } | null>(null);
 
@@ -75,25 +75,23 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
   const executeAction = async () => {
     if (!confirmDialog) return;
     const { id, type } = confirmDialog;
-    
+
     // Optimistically update the UI instantly
     setBookings(prev => prev.map(b => b.id === id ? { ...b, status: type } : b));
     setSelectedBooking(null); // Close the email widget if open
     setConfirmDialog(null);   // Close the confirmation modal
-    
-    // Send the permanent update to the database (and sync with digiviahire@gmail.com backend handlers)
+
+    // Send to your Digiworks automation webhook
     try {
-      const res = await fetch(`/api/bookings/${id}`, { 
-        method: 'PATCH', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: type }) 
+      const res = await fetch(`https://ap.digiworks.ai/api/v1/webhooks/9nCrG8NXMFE5jpiEuuVdE?status=${type}&booking_id=${id}`, { 
+        method: 'GET'
       });
-      
+
       if (!res.ok) {
-        console.error("Failed to update status in database");
+        console.error("Failed to update status via Digiworks webhook");
       }
     } catch (error) {
-      console.error("Error calling PATCH route:", error);
+      console.error("Error calling Digiworks webhook:", error);
     }
   };
 
@@ -126,7 +124,7 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
   const filteredBookings = bookings.filter(booking => {
     const safeStatus = (booking.status || 'pending').toLowerCase();
     const dateStr = booking.start_date_local instanceof Date ? booking.start_date_local.toISOString().split('T')[0] : String(booking.start_date_local || '');
-    
+
     if (filter === 'awaiting') return safeStatus === 'pending' || safeStatus === 'tentative';
     if (filter === 'upcoming') return dateStr >= todayStr;
     if (filter === 'confirmed') return safeStatus === 'confirmed' || safeStatus === 'accepted' || safeStatus === 'approved';
@@ -169,7 +167,7 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
           <div className="bookings-nav-left"><span>All bookings</span></div>
           <span className="bookings-badge">{stats.all}</span>
         </button>
-        
+
         <button className={`bookings-nav-item ${filter === 'upcoming' ? 'active' : ''}`} onClick={() => pickFilter('upcoming')}>
           <div className="bookings-nav-left"><span>Upcoming</span></div>
           <span className="bookings-badge">{stats.upcoming}</span>
@@ -194,13 +192,13 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
             <p className="bookings-subtitle">{VIEW_META[filter][1]}</p>
           </div>
           <div className="bookings-tools">
-            <button type="button" className="bookings-tool">Export</button>
             <button
               type="button"
               onClick={fetchBookings}
               className="bookings-tool"
               title="Refresh data"
               disabled={isLoading}
+              style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border-color)', background: 'transparent' }}
             >
               {isLoading ? 'Refreshing…' : 'Refresh'}
             </button>
@@ -213,7 +211,7 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
           </div>
 
           {error ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--brand)' }}>
+            <div style={{ padding: '40px', textAlign: 'center', color: '#960f18' }}>
               <p>Error loading database. Check your NeonDB string.</p>
               <p style={{ fontSize: '12px', marginTop: '8px' }}>{error}</p>
             </div>
@@ -269,28 +267,25 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
                         </span>
                       </td>
                       <td>{booking.purpose || 'No purpose provided'}</td>
-                      
-                      {/* INLINE APPROVE/DECLINE BUTTONS FOR THE TABLE ROW */}
+
                       <td>
                         {(filter === 'awaiting' || filter === 'pending') && ['pending', 'tentative'].includes(safeStatus) ? (
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <button 
-                              className="btn-decline" 
                               onClick={(e) => { 
                                 e.stopPropagation(); 
-                                setConfirmDialog({ id: booking.id, type: 'declined', roomName: booking.room_name || booking.room_id || 'Unknown Room' }); 
+                                setConfirmDialog({ id: booking.id, type: 'rejected', roomName: booking.room_name || booking.room_id || 'Unknown Room' }); 
                               }}
-                              style={{ padding: '4px 10px', fontSize: '12px' }}
+                              style={{ padding: '6px 14px', fontSize: '13px', background: '#ffffff', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
                             >
                               Decline
                             </button>
                             <button 
-                              className="btn-approve" 
                               onClick={(e) => { 
                                 e.stopPropagation(); 
                                 setConfirmDialog({ id: booking.id, type: 'confirmed', roomName: booking.room_name || booking.room_id || 'Unknown Room' }); 
                               }}
-                              style={{ padding: '4px 10px', fontSize: '12px' }}
+                              style={{ padding: '6px 14px', fontSize: '13px', background: '#111827', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
                             >
                               Approve
                             </button>
@@ -327,7 +322,7 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
               </button>
             </div>
           </div>
-          
+
           <div className="email-widget-body">
             <div className="email-meta">
               <div className="avatar">{(selectedBooking.booked_by_name || 'U').charAt(0)}</div>
@@ -336,46 +331,46 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>To: Facilities Office</div>
               </div>
             </div>
-            
+
             <div className="email-content">
               <p>Hello Facilities Team,</p>
               <p>I would like to request the use of <strong>{selectedBooking.room_name || selectedBooking.room_id}</strong>.</p>
-              
+
               <div className="request-details-box">
                 <div><strong>Date:</strong> {formatDate(selectedBooking.start_date_local)}</div>
                 <div><strong>Time:</strong> {formatTime(selectedBooking.start_time_local)} - {formatTime(selectedBooking.end_time_local)}</div>
                 <div><strong>Purpose:</strong> {selectedBooking.purpose}</div>
               </div>
-              
+
               <p>Please review this request and let me know if it is approved. Thank you!</p>
             </div>
           </div>
-          
+
           {(filter === 'awaiting' || filter === 'pending') && ['pending', 'tentative'].includes((selectedBooking.status || 'pending').toLowerCase()) && (
-             <div className="email-widget-footer">
+             <div className="email-widget-footer" style={{ padding: '16px', display: 'flex', gap: '8px', justifyContent: 'flex-start' }}>
                <button 
-                 className="btn-decline" 
                  onClick={(e) => { 
                    e.stopPropagation(); 
-                   setConfirmDialog({ id: selectedBooking.id, type: 'declined', roomName: selectedBooking.room_name || selectedBooking.room_id || 'Unknown Room' }); 
+                   setConfirmDialog({ id: selectedBooking.id, type: 'rejected', roomName: selectedBooking.room_name || selectedBooking.room_id || 'Unknown Room' }); 
                  }}
+                 style={{ padding: '8px 16px', fontSize: '14px', background: '#ffffff', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
                >
-                 Decline Request
+                 Decline
                </button>
                <button 
-                 className="btn-approve" 
                  onClick={(e) => { 
                    e.stopPropagation(); 
                    setConfirmDialog({ id: selectedBooking.id, type: 'confirmed', roomName: selectedBooking.room_name || selectedBooking.room_id || 'Unknown Room' }); 
                  }}
+                 style={{ padding: '8px 16px', fontSize: '14px', background: '#111827', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
                >
-                 Approve Request
+                 Approve
                </button>
              </div>
           )}
         </div>
       )}
-      
+
       {selectedBooking && isFullScreen && <div className="modal-overlay" onClick={() => setIsFullScreen(false)} />}
 
       {/* CONFIRMATION SAFETY MODAL */}
@@ -405,18 +400,16 @@ export default function BookingsWorkspace({ onCloseDrawer }: BookingsWorkspacePr
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: 0, lineHeight: '1.5' }}>
               Are you sure you want to {confirmDialog.type === 'confirmed' ? 'approve' : 'decline'} the booking request for <strong>{confirmDialog.roomName}</strong>?
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
               <button 
-                className="btn-secondary" 
                 onClick={(e) => { e.stopPropagation(); setConfirmDialog(null); }}
-                style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-main)' }}
+                style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #d1d5db', background: '#ffffff', color: '#374151', fontWeight: 500 }}
               >
                 Cancel
               </button>
               <button 
-                className={confirmDialog.type === 'confirmed' ? 'btn-approve' : 'btn-decline'}
                 onClick={(e) => { e.stopPropagation(); executeAction(); }}
-                style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
+                style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: '#111827', color: '#ffffff', fontWeight: 500 }}
               >
                 Yes, {confirmDialog.type === 'confirmed' ? 'Approve' : 'Decline'}
               </button>
