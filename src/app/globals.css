@@ -1110,6 +1110,154 @@ a:hover {
 }
 
 /* ============================================================== */
+/* ANALYTICS DASHBOARD                                             */
+/* ============================================================== */
+.analytics-loading {
+  text-align: center;
+  padding: 60px;
+  color: var(--text-muted);
+}
+
+.analytics-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 16px;
+}
+
+.analytics-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.metric-card {
+  background: var(--sidebar-hover);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  position: relative;
+}
+
+.metric-card-icon {
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-color);
+  display: flex;
+}
+
+.metric-card-body .metric-card-title {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.metric-card-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.metric-card-trend {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+.analytics-panels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.analytics-panel {
+  background: var(--sidebar-hover);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.analytics-panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-main);
+}
+
+.analytics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analytics-list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.analytics-list-row:last-child {
+  border-bottom: none;
+}
+
+.analytics-list-room {
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.analytics-list-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand);
+  background: var(--brand-tint);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.analytics-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.progress-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--text-main);
+}
+
+.progress-bar-labels strong {
+  font-weight: 600;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-page);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+/* ============================================================== */
 /* GENERATIVE UI: BOOKING FORM                                     */
 /* ============================================================== */
 .booking-form-card {
@@ -1500,6 +1648,11 @@ a:hover {
   }
   .dashboard-title {
     font-size: 28px;
+  }
+  .analytics-metrics-grid,
+  .analytics-panels-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
   .table-container {
     min-width: 0;
