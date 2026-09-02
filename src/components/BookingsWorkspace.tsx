@@ -22,15 +22,34 @@ const VIEW_META: Record<FilterType, [string, string]> = {
 interface Booking {
   id: string;
   room_id: string;
+  booked_by_user_id?: string;
+  title?: string;
+  description?: string;
   start_date_local?: string | Date;
+  end_date_local?: string | Date;
   start_time_local?: string;
   end_time_local?: string;
-  purpose?: string;
+  timezone?: string;
+  all_day?: boolean;
   status?: string;
-  room_name?: string;
+  attendee_count?: number;
+  purpose?: string;
+  approval_date?: string | Date;
+  approved_by?: string;
+  created_at?: string | Date;
+  updated_at?: string | Date;
   booked_by_name?: string;
+
+  // Joined fields
+  room_name?: string;
+  building?: string;
+  room_capacity?: number;
+  room_features?: string | string[];
   booked_by_email?: string;
+  phone_number?: string;
+  student_id?: string;
   role?: string;
+  needs?: string | string[];
 }
 
 export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: BookingsWorkspaceProps) {
@@ -38,13 +57,20 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>('all');
+  
+  // Widget states
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  
   const [confirmDialog, setConfirmDialog] = useState<{
     id: string;
     type: 'confirmed' | 'rejected';
     roomName: string;
   } | null>(null);
+
+  // Decision panel states
+  const [decisionNote, setDecisionNote] = useState('');
+  const [notifyRequester, setNotifyRequester] = useState(true);
 
   const pickFilter = (next: FilterType) => {
     setFilter(next);
@@ -71,19 +97,25 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
     fetchBookings();
   }, []);
 
-  // Executes the permanent action ONLY after confirmation
-  const executeAction = async () => {
-    if (!confirmDialog) return;
-    const { id, type } = confirmDialog;
+  const executeAction = async (type: 'confirmed' | 'rejected', overrideId?: string) => {
+    const targetId = overrideId || confirmDialog?.id;
+    if (!targetId) return;
 
-    // Optimistically update the UI instantly
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status: type } : b));
-    setSelectedBooking(null); // Close the email widget if open
-    setConfirmDialog(null);   // Close the confirmation modal
+    setBookings(prev => prev.map(b => b.id === targetId ? { ...b, status: type } : b));
+    
+    if (confirmDialog) setConfirmDialog(null);
+    if (selectedBooking?.id === targetId) setSelectedBooking(null);
+    setDecisionNote('');
 
-    // Send to your Digiworks automation webhook
     try {
-      const res = await fetch(`https://ap.digiworks.ai/api/v1/webhooks/9nCrG8NXMFE5jpiEuuVdE?status=${type}&booking_id=${id}`, { 
+      const params = new URLSearchParams({
+        status: type,
+        booking_id: targetId,
+        notify: notifyRequester.toString(),
+        note: decisionNote
+      });
+
+      const res = await fetch(`https://ap.digiworks.ai/api/v1/webhooks/9nCrG8NXMFE5jpiEuuVdE?${params.toString()}`, { 
         method: 'GET'
       });
 
@@ -99,26 +131,14 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
 
   const stats = {
     all: bookings.length,
-    awaiting: bookings.filter(b => {
-      const s = (b.status || '').toLowerCase();
-      return s === 'pending' || s === 'tentative';
-    }).length,
+    awaiting: bookings.filter(b => ['pending', 'tentative'].includes((b.status || '').toLowerCase())).length,
     upcoming: bookings.filter(b => {
       const dateStr = b.start_date_local instanceof Date ? b.start_date_local.toISOString().split('T')[0] : String(b.start_date_local || '');
       return dateStr >= todayStr;
     }).length,
-    confirmed: bookings.filter(b => {
-      const s = (b.status || '').toLowerCase();
-      return s === 'confirmed' || s === 'accepted' || s === 'approved';
-    }).length,
-    pending: bookings.filter(b => {
-      const s = (b.status || '').toLowerCase();
-      return s === 'pending' || s === 'tentative';
-    }).length,
-    rejected: bookings.filter(b => {
-      const s = (b.status || '').toLowerCase();
-      return s === 'rejected' || s === 'declined';
-    }).length,
+    confirmed: bookings.filter(b => ['confirmed', 'accepted', 'approved'].includes((b.status || '').toLowerCase())).length,
+    pending: bookings.filter(b => ['pending', 'tentative'].includes((b.status || '').toLowerCase())).length,
+    rejected: bookings.filter(b => ['rejected', 'declined'].includes((b.status || '').toLowerCase())).length,
   };
 
   const filteredBookings = bookings.filter(booking => {
@@ -144,12 +164,27 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
     } catch { return String(timeStr); }
   };
 
-  const formatDate = (dateInput?: string | Date) => {
+  const formatDate = (dateInput?: string | Date, withYear = true) => {
     if (!dateInput) return 'No Date';
     try {
       const date = new Date(String(dateInput));
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(withYear && { year: 'numeric' }) });
     } catch { return String(dateInput); }
+  };
+
+  const formatNeeds = (needs: any, fallbackStr?: string) => {
+    const target = needs || fallbackStr;
+    if (!target) return [];
+    if (Array.isArray(target)) return target;
+    if (typeof target === 'string') {
+      try {
+        const parsed = JSON.parse(target);
+        return Array.isArray(parsed) ? parsed : [target];
+      } catch {
+        return target.split(',').map((n: string) => n.trim()).filter((n: string) => n.length > 0);
+      }
+    }
+    return [];
   };
 
   return (
@@ -157,27 +192,22 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
       {/* Sidebar Navigation */}
       <aside className="bookings-sidebar">
         <h3 className="bookings-sidebar-title">Queues</h3>
-
         <button className={`bookings-nav-item ${filter === 'pending' ? 'active' : ''}`} onClick={() => pickFilter('pending')}>
           <div className="bookings-nav-left"><span>Awaiting approval</span></div>
           <span className="bookings-badge">{stats.pending}</span>
         </button>
-
         <button className={`bookings-nav-item ${filter === 'all' ? 'active' : ''}`} onClick={() => pickFilter('all')}>
           <div className="bookings-nav-left"><span>All bookings</span></div>
           <span className="bookings-badge">{stats.all}</span>
         </button>
-
         <button className={`bookings-nav-item ${filter === 'upcoming' ? 'active' : ''}`} onClick={() => pickFilter('upcoming')}>
           <div className="bookings-nav-left"><span>Upcoming</span></div>
           <span className="bookings-badge">{stats.upcoming}</span>
         </button>
-
         <button className={`bookings-nav-item ${filter === 'confirmed' ? 'active' : ''}`} onClick={() => pickFilter('confirmed')}>
           <div className="bookings-nav-left"><span>Confirmed</span></div>
           <span className="bookings-badge">{stats.confirmed}</span>
         </button>
-
         <button className={`bookings-nav-item ${filter === 'rejected' ? 'active' : ''}`} onClick={() => pickFilter('rejected')}>
           <div className="bookings-nav-left"><span>Declined</span></div>
           <span className="bookings-badge">{stats.rejected}</span>
@@ -237,13 +267,9 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
               <tbody>
                 {filteredBookings.map((booking) => {
                   const safeStatus = (booking.status || 'pending').toLowerCase();
-
                   let displayStatus = 'Tentative';
-                  if (safeStatus === 'confirmed' || safeStatus === 'accepted' || safeStatus === 'approved') {
-                    displayStatus = 'Confirmed';
-                  } else if (safeStatus === 'rejected' || safeStatus === 'declined') {
-                    displayStatus = 'Declined';
-                  }
+                  if (['confirmed', 'accepted', 'approved'].includes(safeStatus)) displayStatus = 'Confirmed';
+                  else if (['rejected', 'declined'].includes(safeStatus)) displayStatus = 'Declined';
 
                   return (
                     <tr 
@@ -258,7 +284,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
                       </td>
                       <td>
                         <strong style={{ display: 'block', fontSize: '14px', color: 'var(--text-main)' }}>{booking.booked_by_name || 'System User'}</strong>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{booking.role || 'General Request'}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{booking.role || 'Student / Faculty'}</span>
                       </td>
                       <td>
                         <strong style={{ display: 'block', fontSize: '14px', color: 'var(--text-main)' }}>{formatDate(booking.start_date_local)}</strong>
@@ -266,8 +292,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
                           {formatTime(booking.start_time_local)} - {formatTime(booking.end_time_local)}
                         </span>
                       </td>
-                      <td>{booking.purpose || 'No purpose provided'}</td>
-
+                      <td>{booking.purpose || booking.title || 'No purpose provided'}</td>
                       <td>
                         {(filter === 'awaiting' || filter === 'pending') && ['pending', 'tentative'].includes(safeStatus) ? (
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -305,94 +330,149 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
         </div>
       </div>
 
-      {/* Picture-in-Picture Email Widget */}
+      {/* PICTURE-IN-PICTURE / FULLSCREEN RICH WIDGET */}
       {selectedBooking && (
         <div className={`email-widget ${isFullScreen ? 'fullscreen' : 'pip'}`}>
-          <div className="email-widget-header">
-            <div>
-              <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)' }}>Booking Request: {selectedBooking.room_name || selectedBooking.room_id}</h3>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>via digiviahire@gmail.com</span>
+          <div className="email-widget-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px', borderBottom: '1px solid var(--border-color)', background: 'var(--navbar-bg)', position: 'sticky', top: 0, zIndex: 10 }}>
+            
+            {/* THE FIX: Added flex: 1 and minWidth: 0 so this container shrinks and text truncates properly */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0, paddingRight: '16px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {selectedBooking.id}
+              </span>
+              <h3 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--text-main)', margin: '2px 0', fontFamily: 'serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {selectedBooking.room_name || selectedBooking.room_id}
+              </h3>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Submitted {formatDate(selectedBooking.created_at || new Date())}
+              </span>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setIsFullScreen(!isFullScreen)} className="widget-icon-btn">
-                {isFullScreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
-              </button>
-              <button onClick={() => setSelectedBooking(null)} className="widget-icon-btn">
-                <X size={16}/>
-              </button>
-            </div>
-          </div>
-
-          <div className="email-widget-body">
-            <div className="email-meta">
-              <div className="avatar">{(selectedBooking.booked_by_name || 'U').charAt(0)}</div>
-              <div>
-                <strong style={{ color: 'var(--text-main)' }}>{selectedBooking.booked_by_name || 'Student / Faculty User'}</strong> &lt;{selectedBooking.booked_by_email || 'user@newman.edu'}&gt;
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>To: Facilities Office</div>
+            
+            {/* THE FIX: Added flexShrink: 0 so the buttons and badge NEVER get pushed off-screen */}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexShrink: 0 }}>
+              <span style={{ background: '#fef3c7', color: '#92400e', fontSize: '12px', fontWeight: 600, padding: '2px 10px', borderRadius: '12px', whiteSpace: 'nowrap' }}>
+                {selectedBooking.status === 'pending' || !selectedBooking.status ? 'Awaiting approval' : selectedBooking.status}
+              </span>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button onClick={() => setIsFullScreen(!isFullScreen)} className="widget-icon-btn" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
+                  {isFullScreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
+                </button>
+                <button onClick={() => setSelectedBooking(null)} className="widget-icon-btn" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
+                  <X size={16}/>
+                </button>
               </div>
             </div>
 
-            <div className="email-content">
-              <p>Hello Facilities Team,</p>
-              <p>I would like to request the use of <strong>{selectedBooking.room_name || selectedBooking.room_id}</strong>.</p>
-
-              <div className="request-details-box">
-                <div><strong>Date:</strong> {formatDate(selectedBooking.start_date_local)}</div>
-                <div><strong>Time:</strong> {formatTime(selectedBooking.start_time_local)} - {formatTime(selectedBooking.end_time_local)}</div>
-                <div><strong>Purpose:</strong> {selectedBooking.purpose}</div>
-              </div>
-
-              <p>Please review this request and let me know if it is approved. Thank you!</p>
-            </div>
           </div>
 
-          {(filter === 'awaiting' || filter === 'pending') && ['pending', 'tentative'].includes((selectedBooking.status || 'pending').toLowerCase()) && (
-             <div className="email-widget-footer" style={{ padding: '16px', display: 'flex', gap: '8px', justifyContent: 'flex-start' }}>
-               <button 
-                 onClick={(e) => { 
-                   e.stopPropagation(); 
-                   setConfirmDialog({ id: selectedBooking.id, type: 'rejected', roomName: selectedBooking.room_name || selectedBooking.room_id || 'Unknown Room' }); 
-                 }}
-                 style={{ padding: '8px 16px', fontSize: '14px', background: '#ffffff', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
-               >
-                 Decline
-               </button>
-               <button 
-                 onClick={(e) => { 
-                   e.stopPropagation(); 
-                   setConfirmDialog({ id: selectedBooking.id, type: 'confirmed', roomName: selectedBooking.room_name || selectedBooking.room_id || 'Unknown Room' }); 
-                 }}
-                 style={{ padding: '8px 16px', fontSize: '14px', background: '#111827', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
-               >
-                 Approve
-               </button>
-             </div>
-          )}
+          <div className="email-widget-body" style={{ padding: '16px', overflowY: 'auto', background: 'var(--bg-page)' }}>
+            
+            {/* REQUESTER CARD */}
+            <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', marginBottom: '16px', background: 'var(--bg-page)' }}>
+              <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', margin: '0 0 16px 0', textTransform: 'uppercase' }}>Requester</h4>
+              <DataRow label="Name" value={selectedBooking.booked_by_name || 'System User'} />
+              <DataRow label="Role" value={selectedBooking.role || 'Student / Faculty'} />
+              <DataRow label="Email" value={selectedBooking.booked_by_user_id || selectedBooking.booked_by_email || 'Not provided'} />
+              <DataRow label="Phone" value={selectedBooking.phone_number || 'Not provided'} />
+              <DataRow label="Student ID" value={selectedBooking.student_id || 'Not provided'} />
+            </div>
+
+            {/* REQUEST CARD */}
+            <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', marginBottom: '16px', background: 'var(--bg-page)' }}>
+              <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', margin: '0 0 16px 0', textTransform: 'uppercase' }}>Request</h4>
+              <DataRow label="Date" value={formatDate(selectedBooking.start_date_local)} />
+              <DataRow label="Time" value={`${formatTime(selectedBooking.start_time_local)} – ${formatTime(selectedBooking.end_time_local)}`} />
+              <DataRow label="Purpose" value={selectedBooking.purpose || selectedBooking.title || 'Not provided'} />
+              
+              <div style={{ marginTop: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '14px', color: 'var(--text-main)' }}>Attendees <strong style={{ fontSize: '16px', color: 'var(--text-main)', marginLeft: '8px' }}>{selectedBooking.attendee_count || 0}</strong></span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>capacity {selectedBooking.room_capacity || 40}</span>
+                </div>
+                {/* Visual Capacity Bar */}
+                <div style={{ width: '100%', height: '6px', background: 'var(--sidebar-hover)', borderRadius: '4px', overflow: 'hidden', marginBottom: '8px' }}>
+                  <div style={{ 
+                    width: `${Math.min(100, ((Number(selectedBooking.attendee_count) || 0) / (selectedBooking.room_capacity || 40)) * 100)}%`, 
+                    height: '100%', 
+                    background: '#2f855a' 
+                  }} />
+                </div>
+              </div>
+
+              <div style={{ marginTop: '20px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px' }}>Room needs</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {formatNeeds(selectedBooking.needs, selectedBooking.description).map((need: string, i: number) => (
+                    <span key={i} style={{ padding: '4px 10px', background: 'var(--input-bg)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-main)', fontWeight: 500 }}>
+                      {need}
+                    </span>
+                  ))}
+                  {formatNeeds(selectedBooking.needs, selectedBooking.description).length === 0 && <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No special needs requested</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* ROOM CARD */}
+            <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', marginBottom: '16px', background: 'var(--bg-page)' }}>
+              <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', margin: '0 0 16px 0', textTransform: 'uppercase' }}>Room</h4>
+              <DataRow label="Building" value={selectedBooking.building || 'DeMattias Hall'} />
+              <DataRow label="Capacity" value={selectedBooking.room_capacity || 40} />
+              <DataRow label="Features" value={formatNeeds(selectedBooking.room_features).join(' · ') || 'Standard setup'} />
+            </div>
+
+            {/* DECISION CARD */}
+            {['pending', 'tentative'].includes((selectedBooking.status || 'pending').toLowerCase()) && (
+              <div style={{ border: '1px solid #283593', borderRadius: '12px', padding: '16px', background: '#f8faff' }}>
+                <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#1a237e', margin: '0 0 12px 0', fontFamily: 'serif' }}>Decision Notes</h4>
+                
+                <textarea 
+                  placeholder="Optional note to the requester (included in the email)..." 
+                  value={decisionNote}
+                  onChange={(e) => setDecisionNote(e.target.value)}
+                  style={{ width: '100%', height: '80px', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', resize: 'none', marginBottom: '12px', outline: 'none' }}
+                />
+                
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#111827', fontWeight: 500, marginBottom: '16px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={notifyRequester} onChange={(e) => setNotifyRequester(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#1a237e' }} />
+                  Notify requester by email
+                </label>
+
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                  <button 
+                    onClick={() => setConfirmDialog({ id: selectedBooking.id, type: 'rejected', roomName: selectedBooking.room_name || selectedBooking.room_id || 'Unknown Room' })}
+                    style={{ flex: 1, background: '#ffffff', color: '#374151', border: '1px solid #d1d5db', padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
+                  >
+                    Decline
+                  </button>
+                  <button 
+                    onClick={() => setConfirmDialog({ id: selectedBooking.id, type: 'confirmed', roomName: selectedBooking.room_name || selectedBooking.room_id || 'Unknown Room' })}
+                    style={{ flex: 1, background: '#111827', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
+                  >
+                    Approve request
+                  </button>
+                </div>
+
+                <p style={{ fontSize: '12px', color: '#64748b', margin: 0, lineHeight: 1.5 }}>
+                  Approving moves the request to <strong>Confirmed</strong>, sends a confirmation email with calendar details to <strong>{selectedBooking.booked_by_user_id || selectedBooking.booked_by_email || 'the user'}</strong>, and updates the queue count. Declining sends a decline email with your note.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {selectedBooking && isFullScreen && <div className="modal-overlay" onClick={() => setIsFullScreen(false)} />}
+      {selectedBooking && isFullScreen && <div className="modal-overlay" onClick={() => setIsFullScreen(false)} style={{ zIndex: 999, background: 'rgba(0,0,0,0.4)', position: 'fixed', inset: 0 }} />}
 
-      {/* CONFIRMATION SAFETY MODAL */}
+      {/* CONFIRMATION SAFETY MODAL FOR INLINE TABLE BUTTONS AND WIDGET BUTTONS */}
       {confirmDialog && (
         <>
-          <div className="modal-overlay" style={{ zIndex: 10001 }} onClick={() => setConfirmDialog(null)} />
+          <div className="modal-overlay" style={{ zIndex: 10001, background: 'rgba(0,0,0,0.4)', position: 'fixed', inset: 0 }} onClick={() => setConfirmDialog(null)} />
           <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: 'var(--bg-page)',
-            border: '1px solid var(--border-color)',
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            background: 'var(--bg-page)', border: '1px solid var(--border-color)',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-            borderRadius: '12px',
-            padding: '24px',
-            width: '90%',
-            maxWidth: '400px',
-            zIndex: 10002,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px'
+            borderRadius: '12px', padding: '24px', width: '90%', maxWidth: '400px',
+            zIndex: 10002, display: 'flex', flexDirection: 'column', gap: '16px'
           }}>
             <h3 style={{ fontSize: '18px', fontWeight: 600, margin: 0, color: 'var(--text-main)' }}>
               Confirm {confirmDialog.type === 'confirmed' ? 'Approval' : 'Decline'}
@@ -403,13 +483,13 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
               <button 
                 onClick={(e) => { e.stopPropagation(); setConfirmDialog(null); }}
-                style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #d1d5db', background: '#ffffff', color: '#374151', fontWeight: 500 }}
+                style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-main)', fontWeight: 500 }}
               >
                 Cancel
               </button>
               <button 
-                onClick={(e) => { e.stopPropagation(); executeAction(); }}
-                style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: '#111827', color: '#ffffff', fontWeight: 500 }}
+                onClick={(e) => { e.stopPropagation(); executeAction(confirmDialog.type); }}
+                style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: confirmDialog.type === 'confirmed' ? '#111827' : '#ef4444', color: '#ffffff', fontWeight: 500 }}
               >
                 Yes, {confirmDialog.type === 'confirmed' ? 'Approve' : 'Decline'}
               </button>
@@ -418,5 +498,15 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
         </>
       )}
     </section>
+  );
+}
+
+// Helper component for identical key-value rows inside the cards
+function DataRow({ label, value }: { label: string, value: string | number }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '14px' }}>
+      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontWeight: 600, color: 'var(--text-main)', textAlign: 'right', maxWidth: '60%' }}>{value}</span>
+    </div>
   );
 }
