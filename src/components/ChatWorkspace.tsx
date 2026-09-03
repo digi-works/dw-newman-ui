@@ -36,6 +36,10 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingFact, setLoadingFact] = useState(NEWMAN_FACTS[0]);
+  // Id of the AI message that must render the booking form no matter what it says —
+  // set when the user explicitly asks to reserve a room, so the form isn't at the mercy
+  // of keyword-matching the AI's reply text.
+  const [forcedBookingMsgId, setForcedBookingMsgId] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -188,14 +192,20 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
   };
 
   // NEW: displayMessage parameter handles what is shown on screen vs what is sent to AI
-  const submitMessage = async (textToSend: string, displayMessage?: string) => {
+  // forceBookingForm guarantees the booking form renders under the AI's reply to this
+  // message, regardless of what the AI actually says.
+  const submitMessage = async (textToSend: string, displayMessage?: string, forceBookingForm?: boolean) => {
     if (!textToSend.trim() || isLoading) return;
-    
+
     setIsLoading(true);
     setLoadingFact(NEWMAN_FACTS[Math.floor(Math.random() * NEWMAN_FACTS.length)]);
 
     const userMsgId = Date.now().toString();
     const aiMsgId = (Date.now() + 1).toString();
+
+    if (forceBookingForm) {
+      setForcedBookingMsgId(aiMsgId);
+    }
 
     const isFirstMessage = activeChat.messages.length === 0;
     const contentToDisplay = displayMessage || textToSend;
@@ -630,7 +640,9 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     const justSubmittedForm = prevMsg?.role === 'user' && 
       (prevMsg.content.includes('```json') || prevMsg.content.includes('Here are my details for the booking:'));
     
-    isWaitingForForm = (asksForPersonal || asksForRoomDetails) && isRequesting && !isConfirmation && !justSubmittedForm;
+    isWaitingForForm =
+      lastMsg.id === forcedBookingMsgId ||
+      ((asksForPersonal || asksForRoomDetails) && isRequesting && !isConfirmation && !justSubmittedForm);
   }
 
   return (
@@ -692,7 +704,7 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
 
                 <button
                   className="suggestion-card"
-                  onClick={() => submitMessage("I need to book a space for a class, club, or study group.")}
+                  onClick={() => submitMessage("I need to book a space for a class, club, or study group.", undefined, true)}
                 >
                   <div className="card-icon-wrapper green" aria-hidden="true">▤</div>
                   <div className="card-title">Reserve a room</div>
@@ -734,11 +746,15 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
               const justSubmittedForm = prevMsg?.role === 'user' && 
                 (prevMsg.content.includes('```json') || prevMsg.content.includes('Here are my details for the booking:'));
               
-              const isBookingForm = msg.role === 'ai' && 
-                                    (asksForPersonal || asksForRoomDetails) && 
-                                    isRequesting && 
-                                    !isConfirmation && 
-                                    !justSubmittedForm;
+              const isBookingForm = msg.role === 'ai' && (
+                msg.id === forcedBookingMsgId ||
+                (
+                  (asksForPersonal || asksForRoomDetails) &&
+                  isRequesting &&
+                  !isConfirmation &&
+                  !justSubmittedForm
+                )
+              );
               
               const isLastMessage = index === activeChat.messages.length - 1;
 
@@ -754,7 +770,7 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                     {msg.thought && isCurrentLoading && (
                       <div style={{ marginBottom: '16px' }}>
                         <strong style={{ color: 'var(--brand)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '6px' }}>
-                          🎓 Did you know?
+                          Did you know?
                         </strong>
                         <div style={{ fontSize: '14px', color: 'var(--text-main)', marginBottom: '4px', lineHeight: '1.4' }}>
                           {loadingFact}
