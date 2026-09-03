@@ -2,6 +2,21 @@ import { useState, useRef, useEffect } from 'react';
 import { streamFlowiseChat } from '../flowise';
 import type { ChatSession } from '../types';
 
+const COUNTRY_CODES = [
+  { code: '+1', label: '🇺🇸 US +1', digits: 10 },
+  { code: '+91', label: '🇮🇳 IN +91', digits: 10 },
+  { code: '+44', label: '🇬🇧 UK +44', digits: 10 },
+  { code: '+61', label: '🇦🇺 AU +61', digits: 9 },
+  { code: '+81', label: '🇯🇵 JP +81', digits: 10 },
+  { code: '+86', label: '🇨🇳 CN +86', digits: 11 },
+  { code: '+49', label: '🇩🇪 DE +49', digits: 10 },
+  { code: '+33', label: '🇫🇷 FR +33', digits: 9 },
+  { code: '+971', label: '🇦🇪 AE +971', digits: 9 },
+];
+
+// Standard email shape (local@domain.tld); rejects missing parts and any whitespace.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const NEWMAN_FACTS = [
   "Newman University was founded in 1933 by the Adorers of the Blood of Christ.",
   "The university was originally named Sacred Heart Junior College.",
@@ -284,7 +299,15 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [studentId, setStudentId] = useState('');
+    const [countryCode, setCountryCode] = useState('+1');
     const [phone, setPhone] = useState('');
+
+    const expectedPhoneDigits = COUNTRY_CODES.find(c => c.code === countryCode)?.digits ?? 10;
+    const phoneDigitsOnly = phone.replace(/\D/g, '');
+    const isPhoneValid = phone.trim() === '' || phoneDigitsOnly.length === expectedPhoneDigits;
+
+    // Validated against the raw value on purpose — leading/trailing/internal spaces must fail, not get trimmed away.
+    const isEmailValid = email === '' || EMAIL_REGEX.test(email);
 
     // Fetch unique buildings on form load
     useEffect(() => {
@@ -361,14 +384,14 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
         fullName: name.trim(),
         email: email.trim(),
         studentId: studentId.trim(),
-        ...(phone && { phoneNumber: phone.trim() })
+        ...(phone && { phoneNumber: `${countryCode} ${phone.trim()}` })
       };
 
       const finalString = `Here are my details for the booking:\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
-      
+
       // NEW: Create a beautifully formatted string to display in the chat UI
       let displayString = `Here are my details for the booking:\n- **Room:** ${selectedRoom}\n- **Date:** ${date}\n- **Time:** ${startTime} to ${endTime}\n- **Purpose:** ${purpose.trim()}\n- **Attendees:** ${people}\n- **Name:** ${name.trim()} (${studentId.trim()})\n- **Email:** ${email.trim()}`;
-      if (phone) displayString += `\n- **Phone:** ${phone.trim()}`;
+      if (phone) displayString += `\n- **Phone:** ${countryCode} ${phone.trim()}`;
       if (needs.length > 0) displayString += `\n- **Needs:** ${needs.join(', ')}`;
 
       // Pass the raw JSON to Flowise, but render the clean string in the UI
@@ -376,7 +399,7 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     };
 
     const isStep1Complete = purpose.trim() && date && startTime && endTime;
-    const isStep2Complete = selectedRoom && name.trim() && email.trim() && studentId.trim();
+    const isStep2Complete = selectedRoom && name.trim() && email.trim() && studentId.trim() && isPhoneValid && isEmailValid;
 
     return (
       <div className="booking-form-card">
@@ -512,17 +535,53 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
               
               <div className="booking-form-row">
                 <label>Newman Email Address</label>
-                <input type="email" className="booking-input" placeholder="johndoe@newman.edu" value={email} onChange={e => setEmail(e.target.value)} />
+                <input
+                  type="email"
+                  className="booking-input"
+                  placeholder="johndoe@newman.edu"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  style={{ borderColor: !isEmailValid ? 'var(--red, #dc2626)' : undefined }}
+                />
+                {!isEmailValid && (
+                  <span style={{ fontSize: '12px', color: 'var(--red, #dc2626)', marginTop: '4px' }}>
+                    Enter a valid email address (no spaces, e.g. johndoe@newman.edu)
+                  </span>
+                )}
               </div>
 
               <div className="form-grid-2">
                 <div className="booking-form-row">
-                  <label>Student ID</label>
+                  <label>Faculty ID or Event Coordinator ID</label>
                   <input type="text" className="booking-input" placeholder="e.g. 12345678" value={studentId} onChange={e => setStudentId(e.target.value)} />
                 </div>
                 <div className="booking-form-row">
-                  <label>Mobile Phone (Optional)</label>
-                  <input type="tel" className="booking-input" placeholder="(555) 555-5555" value={phone} onChange={e => setPhone(e.target.value)} />
+                  <label>Mobile Phone</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select
+                      className="booking-input"
+                      value={countryCode}
+                      onChange={e => setCountryCode(e.target.value)}
+                      style={{ flex: '0 0 100px' }}
+                    >
+                      {COUNTRY_CODES.map(c => (
+                        <option key={c.code} value={c.code}>{c.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="tel"
+                      className="booking-input"
+                      placeholder={`${expectedPhoneDigits}-digit number`}
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      style={{ flex: 1, borderColor: !isPhoneValid ? 'var(--red, #dc2626)' : undefined }}
+                    />
+                  </div>
+                  {!isPhoneValid && (
+                    <span style={{ fontSize: '12px', color: 'var(--red, #dc2626)', marginTop: '4px' }}>
+                      Enter a valid {expectedPhoneDigits}-digit number for {countryCode}
+                    </span>
+                  )}
                 </div>
               </div>
 

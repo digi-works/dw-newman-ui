@@ -346,6 +346,11 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 Submitted {formatDate(selectedBooking.created_at || new Date())}
               </span>
+              {selectedBooking.updated_at && selectedBooking.created_at && String(selectedBooking.updated_at) !== String(selectedBooking.created_at) && (
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Updated {formatDate(selectedBooking.updated_at)}
+                </span>
+              )}
             </div>
             
             {/* THE FIX: Added flexShrink: 0 so the buttons and badge NEVER get pushed off-screen */}
@@ -371,10 +376,8 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
             <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', marginBottom: '16px', background: 'var(--bg-page)' }}>
               <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', margin: '0 0 16px 0', textTransform: 'uppercase' }}>Requester</h4>
               <DataRow label="Name" value={selectedBooking.booked_by_name || 'System User'} />
-              <DataRow label="Role" value={selectedBooking.role || 'Student / Faculty'} />
               <DataRow label="Email" value={selectedBooking.booked_by_user_id || selectedBooking.booked_by_email || 'Not provided'} />
               <DataRow label="Phone" value={selectedBooking.phone_number || 'Not provided'} />
-              <DataRow label="Student ID" value={selectedBooking.student_id || 'Not provided'} />
             </div>
 
             {/* REQUEST CARD */}
@@ -383,7 +386,16 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
               <DataRow label="Date" value={formatDate(selectedBooking.start_date_local)} />
               <DataRow label="Time" value={`${formatTime(selectedBooking.start_time_local)} – ${formatTime(selectedBooking.end_time_local)}`} />
               <DataRow label="Purpose" value={selectedBooking.purpose || selectedBooking.title || 'Not provided'} />
-              
+              {selectedBooking.description && selectedBooking.description !== selectedBooking.purpose && (
+                <DataRow label="Description" value={selectedBooking.description} />
+              )}
+              {selectedBooking.all_day && (
+                <DataRow label="All Day" value="Yes" />
+              )}
+              {selectedBooking.end_date_local && String(selectedBooking.end_date_local).slice(0, 10) !== String(selectedBooking.start_date_local).slice(0, 10) && (
+                <DataRow label="End Date" value={formatDate(selectedBooking.end_date_local)} />
+              )}
+
               <div style={{ marginTop: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
                   <span style={{ fontSize: '14px', color: 'var(--text-main)' }}>Attendees <strong style={{ fontSize: '16px', color: 'var(--text-main)', marginLeft: '8px' }}>{selectedBooking.attendee_count || 0}</strong></span>
@@ -419,6 +431,15 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
               <DataRow label="Capacity" value={selectedBooking.room_capacity || 40} />
               <DataRow label="Features" value={formatNeeds(selectedBooking.room_features).join(' · ') || 'Standard setup'} />
             </div>
+
+            {/* DECISION AUDIT CARD - who/when this was decided, straight from room_booking_details */}
+            {!['pending', 'tentative'].includes((selectedBooking.status || 'pending').toLowerCase()) && (selectedBooking.approved_by || selectedBooking.approval_date) && (
+              <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', marginBottom: '16px', background: 'var(--bg-page)' }}>
+                <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', margin: '0 0 16px 0', textTransform: 'uppercase' }}>Decision</h4>
+                <DataRow label="Decided By" value={selectedBooking.approved_by || 'Not recorded'} />
+                <DataRow label="Decision Date" value={selectedBooking.approval_date ? formatDate(selectedBooking.approval_date) : 'Not recorded'} />
+              </div>
+            )}
 
             {/* DECISION CARD */}
             {['pending', 'tentative'].includes((selectedBooking.status || 'pending').toLowerCase()) && (
