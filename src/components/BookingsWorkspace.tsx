@@ -101,21 +101,38 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
     const targetId = overrideId || confirmDialog?.id;
     if (!targetId) return;
 
+    const targetBooking = bookings.find(b => b.id === targetId);
+
     setBookings(prev => prev.map(b => b.id === targetId ? { ...b, status: type } : b));
-    
+
     if (confirmDialog) setConfirmDialog(null);
     if (selectedBooking?.id === targetId) setSelectedBooking(null);
     setDecisionNote('');
 
     try {
+      const bookingDateStr = targetBooking?.start_date_local instanceof Date
+        ? targetBooking.start_date_local.toISOString().split('T')[0]
+        : String(targetBooking?.start_date_local || '').split('T')[0];
+
       const params = new URLSearchParams({
         status: type,
         booking_id: targetId,
+        room_id: targetBooking?.room_id || '',
+        room_name: targetBooking?.room_name || '',
+        booking_date: bookingDateStr,
+        start_time: targetBooking?.start_time_local || '',
+        end_time: targetBooking?.end_time_local || '',
+        booked_by_name: targetBooking?.booked_by_name || '',
+        booked_by_email: targetBooking?.booked_by_user_id || '',
+        booked_by_phone: targetBooking?.phone_number || '',
+        expected_attendees: (targetBooking?.attendee_count ?? '').toString(),
+        purpose: targetBooking?.purpose || targetBooking?.title || '',
+        student_id: targetBooking?.student_id || '',
         notify: notifyRequester.toString(),
         note: decisionNote
       });
 
-      const res = await fetch(`https://ap.digiworks.ai/api/v1/webhooks/9nCrG8NXMFE5jpiEuuVdE?${params.toString()}`, { 
+      const res = await fetch(`https://ap.digiworks.ai/api/v1/webhooks/9nCrG8NXMFE5jpiEuuVdE?${params.toString()}`, {
         method: 'GET'
       });
 
@@ -378,6 +395,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
               <DataRow label="Name" value={selectedBooking.booked_by_name || 'System User'} />
               <DataRow label="Email" value={selectedBooking.booked_by_user_id || selectedBooking.booked_by_email || 'Not provided'} />
               <DataRow label="Phone" value={selectedBooking.phone_number || 'Not provided'} />
+              <DataRow label="Faculty / Coordinator ID" value={selectedBooking.student_id || 'Not provided'} />
             </div>
 
             {/* REQUEST CARD */}

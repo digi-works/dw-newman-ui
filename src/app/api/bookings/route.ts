@@ -9,6 +9,7 @@ export async function GET() {
         b.room_id,
         b.booked_by_user_id,
         b.booked_by_name,
+        b.booked_by_id as student_id,
         b.phone as phone_number,
         b.title,
         b.description,
