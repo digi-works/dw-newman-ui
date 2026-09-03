@@ -151,7 +151,8 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
     awaiting: bookings.filter(b => ['pending', 'tentative'].includes((b.status || '').toLowerCase())).length,
     upcoming: bookings.filter(b => {
       const dateStr = b.start_date_local instanceof Date ? b.start_date_local.toISOString().split('T')[0] : String(b.start_date_local || '');
-      return dateStr >= todayStr;
+      const safeStatus = (b.status || 'pending').toLowerCase();
+      return dateStr >= todayStr && !['rejected', 'declined'].includes(safeStatus);
     }).length,
     confirmed: bookings.filter(b => ['confirmed', 'accepted', 'approved'].includes((b.status || '').toLowerCase())).length,
     pending: bookings.filter(b => ['pending', 'tentative'].includes((b.status || '').toLowerCase())).length,
@@ -163,7 +164,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
     const dateStr = booking.start_date_local instanceof Date ? booking.start_date_local.toISOString().split('T')[0] : String(booking.start_date_local || '');
 
     if (filter === 'awaiting') return safeStatus === 'pending' || safeStatus === 'tentative';
-    if (filter === 'upcoming') return dateStr >= todayStr;
+    if (filter === 'upcoming') return dateStr >= todayStr && safeStatus !== 'rejected' && safeStatus !== 'declined';
     if (filter === 'confirmed') return safeStatus === 'confirmed' || safeStatus === 'accepted' || safeStatus === 'approved';
     if (filter === 'pending') return safeStatus === 'pending' || safeStatus === 'tentative';
     if (filter === 'rejected') return safeStatus === 'rejected' || safeStatus === 'declined';
