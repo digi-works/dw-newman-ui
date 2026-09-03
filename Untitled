@@ -1,3 +1,0 @@
-git add -f .env.eg
-git commit -m "Add environment variable template"
-git push origin main
