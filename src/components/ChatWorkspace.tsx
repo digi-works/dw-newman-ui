@@ -762,7 +762,9 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                 <div key={msg.id} className={`message-row ${msg.role}`}>
                   
                   {msg.role === 'ai' && (
-                    <div className="ai-avatar">NU</div>
+                    <div className="ai-avatar">
+                      <img src="/newman-chat.png" alt="Newman Assistant" />
+                    </div>
                   )}
                   
                   <div className={`message-bubble ${msg.role}`}>
@@ -787,7 +789,12 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                       </div>
                     )}
 
-                    {isBookingForm && isLastMessage && (
+                    {isBookingForm && isLastMessage && isCurrentLoading && (
+                      <div style={{ marginTop: '12px', padding: '12px', background: 'var(--sidebar-hover)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                        Preparing the room request form…
+                      </div>
+                    )}
+                    {isBookingForm && isLastMessage && !isCurrentLoading && (
                        <BookingDetailsForm aiMessage="{msg.content}"/>
                     )}
                     {isBookingForm && !isLastMessage && (
