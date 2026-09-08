@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface BookingsWorkspaceProps {
   onBookRoom: () => void;
@@ -60,8 +60,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
   
   // Widget states
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [isFullScreen, setIsFullScreen] = useState(false);
-  
+
   const [confirmDialog, setConfirmDialog] = useState<{
     id: string;
     type: 'confirmed' | 'rejected';
@@ -348,9 +347,9 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
         </div>
       </div>
 
-      {/* PICTURE-IN-PICTURE / FULLSCREEN RICH WIDGET */}
+      {/* MAXIMIZED RICH WIDGET */}
       {selectedBooking && (
-        <div className={`email-widget ${isFullScreen ? 'fullscreen' : 'pip'}`}>
+        <div className="email-widget fullscreen">
           <div className="email-widget-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px', borderBottom: '1px solid var(--border-color)', background: 'var(--navbar-bg)', position: 'sticky', top: 0, zIndex: 10 }}>
             
             {/* THE FIX: Added flex: 1 and minWidth: 0 so this container shrinks and text truncates properly */}
@@ -377,9 +376,6 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
                 {selectedBooking.status === 'pending' || !selectedBooking.status ? 'Awaiting approval' : selectedBooking.status}
               </span>
               <div style={{ display: 'flex', gap: '4px' }}>
-                <button onClick={() => setIsFullScreen(!isFullScreen)} className="widget-icon-btn" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
-                  {isFullScreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
-                </button>
                 <button onClick={() => setSelectedBooking(null)} className="widget-icon-btn" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
                   <X size={16}/>
                 </button>
@@ -501,7 +497,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
         </div>
       )}
 
-      {selectedBooking && isFullScreen && <div className="modal-overlay" onClick={() => setIsFullScreen(false)} style={{ zIndex: 999, background: 'rgba(0,0,0,0.4)', position: 'fixed', inset: 0 }} />}
+      {selectedBooking && <div className="modal-overlay" onClick={() => setSelectedBooking(null)} style={{ zIndex: 999, background: 'rgba(0,0,0,0.4)', position: 'fixed', inset: 0 }} />}
 
       {/* CONFIRMATION SAFETY MODAL FOR INLINE TABLE BUTTONS AND WIDGET BUTTONS */}
       {confirmDialog && (
