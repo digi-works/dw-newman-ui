@@ -24,6 +24,7 @@ export async function GET() {
         b.attendee_count,
         b.approval_date,
         b.approved_by,
+        b.notes,
         b.created_at,
         b.updated_at,
         r.name as room_name,

@@ -35,6 +35,9 @@
   --bubble-user-text: #ffffff;
   --bubble-ai-text: #071d49;
   --disabled-fill: #d6d9de;
+  --decision-bg: #f8faff;
+  --decision-border: #283593;
+  --decision-heading: #1a237e;
   --font-sans: "Montserrat", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-serif: "Libre Baskerville", Georgia, "Times New Roman", serif;
 }
@@ -67,6 +70,9 @@
   --bubble-user-text: #f3f4f6;
   --bubble-ai-text: #f3f4f6;
   --disabled-fill: #3a3a3a;
+  --decision-bg: #2a2a2a;
+  --decision-border: #454545;
+  --decision-heading: #f3f4f6;
 }
 
 html,
