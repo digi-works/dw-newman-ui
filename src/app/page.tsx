@@ -130,7 +130,6 @@ export default function Page() {
           </nav>
 
           <div className="nav-right">
-            <span className="nav-user-label">Facilities Office</span>
             <button
               type="button"
               className="nav-theme-btn"

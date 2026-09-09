@@ -10,21 +10,21 @@ export async function PATCH(
     if (!dbUrl) throw new Error("Database URL missing");
     
     const body = await request.json();
-    const { status } = body;
-    
+    const { status, notes } = body;
+
     if (!status) {
       return NextResponse.json({ error: "Status is required" }, { status: 400 });
     }
 
     const pool = new Pool({ connectionString: dbUrl });
 
-    // Update the booking status safely
+    // Update the booking status (and decision reason) safely
     const { rows } = await pool.query(
-      `UPDATE room_booking_details 
-       SET status = $1 
-       WHERE id = $2 
+      `UPDATE room_booking_details
+       SET status = $1, notes = $2, approval_date = NOW()
+       WHERE id = $3
        RETURNING *`,
-      [status, params.id]
+      [status, notes ?? null, params.id]
     );
 
     await pool.end();

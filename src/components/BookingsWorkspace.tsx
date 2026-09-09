@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface BookingsWorkspaceProps {
   onBookRoom: () => void;
@@ -36,6 +36,7 @@ interface Booking {
   purpose?: string;
   approval_date?: string | Date;
   approved_by?: string;
+  notes?: string;
   created_at?: string | Date;
   updated_at?: string | Date;
   booked_by_name?: string;
@@ -60,8 +61,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
   
   // Widget states
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [isFullScreen, setIsFullScreen] = useState(false);
-  
+
   const [confirmDialog, setConfirmDialog] = useState<{
     id: string;
     type: 'confirmed' | 'rejected';
@@ -70,12 +70,19 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
 
   // Decision panel states
   const [decisionNote, setDecisionNote] = useState('');
+  const [noteError, setNoteError] = useState(false);
   const [notifyRequester, setNotifyRequester] = useState(true);
 
   const pickFilter = (next: FilterType) => {
     setFilter(next);
     setSelectedBooking(null);
     onCloseDrawer?.();
+  };
+
+  const openBooking = (booking: Booking) => {
+    setDecisionNote('');
+    setNoteError(false);
+    setSelectedBooking(booking);
   };
 
   const fetchBookings = async () => {
@@ -101,15 +108,26 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
     const targetId = overrideId || confirmDialog?.id;
     if (!targetId) return;
 
+    const reason = decisionNote.trim();
+    if (!reason) { setNoteError(true); return; } // Reason is mandatory - validated inline before this is ever reached, this is just a safety net
+
     const targetBooking = bookings.find(b => b.id === targetId);
 
-    setBookings(prev => prev.map(b => b.id === targetId ? { ...b, status: type } : b));
+    setBookings(prev => prev.map(b => b.id === targetId ? { ...b, status: type, notes: reason, approval_date: new Date().toISOString() } : b));
 
     if (confirmDialog) setConfirmDialog(null);
     if (selectedBooking?.id === targetId) setSelectedBooking(null);
     setDecisionNote('');
+    setNoteError(false);
 
     try {
+      // Persist the decision + reason in our own database first
+      fetch(`/api/bookings/${targetId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: type, notes: reason }),
+      }).catch(err => console.error("Error saving decision to database:", err));
+
       const bookingDateStr = targetBooking?.start_date_local instanceof Date
         ? targetBooking.start_date_local.toISOString().split('T')[0]
         : String(targetBooking?.start_date_local || '').split('T')[0];
@@ -129,7 +147,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
         purpose: targetBooking?.purpose || targetBooking?.title || '',
         student_id: targetBooking?.student_id || '',
         notify: notifyRequester.toString(),
-        note: decisionNote
+        note: reason
       });
 
       const res = await fetch(`https://ap.digiworks.ai/api/v1/webhooks/9nCrG8NXMFE5jpiEuuVdE?${params.toString()}`, {
@@ -180,6 +198,11 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
       const formattedHours = h % 12 || 12;
       return `${formattedHours}:${minutes} ${ampm}`;
     } catch { return String(timeStr); }
+  };
+
+  const toTitleCase = (str?: string) => {
+    if (!str) return str;
+    return str.toLowerCase().replace(/(^|[\s-])\S/g, (c) => c.toUpperCase());
   };
 
   const formatDate = (dateInput?: string | Date, withYear = true) => {
@@ -290,14 +313,14 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
                   else if (['rejected', 'declined'].includes(safeStatus)) displayStatus = 'Declined';
 
                   return (
-                    <tr 
-                      key={booking.id} 
-                      onClick={() => setSelectedBooking(booking)} 
+                    <tr
+                      key={booking.id}
+                      onClick={() => openBooking(booking)}
                       style={{ cursor: 'pointer', background: selectedBooking?.id === booking.id ? 'var(--sidebar-hover)' : '' }}
                     >
                       <td>
                         <div className="room-cell">
-                          <span>{booking.room_name || booking.room_id || 'Unknown Room'}</span>
+                          <span>{toTitleCase(booking.room_name) || booking.room_id || 'Unknown Room'}</span>
                         </div>
                       </td>
                       <td>
@@ -314,21 +337,21 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
                       <td>
                         {(filter === 'awaiting' || filter === 'pending') && ['pending', 'tentative'].includes(safeStatus) ? (
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setConfirmDialog({ id: booking.id, type: 'rejected', roomName: booking.room_name || booking.room_id || 'Unknown Room' }); 
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openBooking(booking);
                               }}
-                              style={{ padding: '6px 14px', fontSize: '13px', background: '#ffffff', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
+                              style={{ padding: '6px 14px', fontSize: '13px', background: 'transparent', color: 'var(--text-main)', border: '1px solid var(--text-main)', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
                             >
                               Decline
                             </button>
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setConfirmDialog({ id: booking.id, type: 'confirmed', roomName: booking.room_name || booking.room_id || 'Unknown Room' }); 
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openBooking(booking);
                               }}
-                              style={{ padding: '6px 14px', fontSize: '13px', background: '#111827', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
+                              style={{ padding: '6px 14px', fontSize: '13px', background: 'var(--text-main)', color: 'var(--bg-page)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 500 }}
                             >
                               Approve
                             </button>
@@ -348,9 +371,9 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
         </div>
       </div>
 
-      {/* PICTURE-IN-PICTURE / FULLSCREEN RICH WIDGET */}
+      {/* MAXIMIZED RICH WIDGET */}
       {selectedBooking && (
-        <div className={`email-widget ${isFullScreen ? 'fullscreen' : 'pip'}`}>
+        <div className="email-widget fullscreen">
           <div className="email-widget-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px', borderBottom: '1px solid var(--border-color)', background: 'var(--navbar-bg)', position: 'sticky', top: 0, zIndex: 10 }}>
             
             {/* THE FIX: Added flex: 1 and minWidth: 0 so this container shrinks and text truncates properly */}
@@ -359,7 +382,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
                 {selectedBooking.id}
               </span>
               <h3 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--text-main)', margin: '2px 0', fontFamily: 'serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {selectedBooking.room_name || selectedBooking.room_id}
+                {toTitleCase(selectedBooking.room_name) || selectedBooking.room_id}
               </h3>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 Submitted {formatDate(selectedBooking.created_at || new Date())}
@@ -377,9 +400,6 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
                 {selectedBooking.status === 'pending' || !selectedBooking.status ? 'Awaiting approval' : selectedBooking.status}
               </span>
               <div style={{ display: 'flex', gap: '4px' }}>
-                <button onClick={() => setIsFullScreen(!isFullScreen)} className="widget-icon-btn" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
-                  {isFullScreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
-                </button>
                 <button onClick={() => setSelectedBooking(null)} className="widget-icon-btn" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
                   <X size={16}/>
                 </button>
@@ -451,48 +471,77 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
               <DataRow label="Features" value={formatNeeds(selectedBooking.room_features).join(' · ') || 'Standard setup'} />
             </div>
 
-            {/* DECISION AUDIT CARD - who/when this was decided, straight from room_booking_details */}
-            {!['pending', 'tentative'].includes((selectedBooking.status || 'pending').toLowerCase()) && (selectedBooking.approved_by || selectedBooking.approval_date) && (
+            {/* DECISION AUDIT CARD - who/when/why this was decided, straight from room_booking_details */}
+            {!['pending', 'tentative'].includes((selectedBooking.status || 'pending').toLowerCase()) && (selectedBooking.approved_by || selectedBooking.approval_date || selectedBooking.notes) && (
               <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', marginBottom: '16px', background: 'var(--bg-page)' }}>
                 <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', margin: '0 0 16px 0', textTransform: 'uppercase' }}>Decision</h4>
                 <DataRow label="Decided By" value={selectedBooking.approved_by || 'Not recorded'} />
                 <DataRow label="Decision Date" value={selectedBooking.approval_date ? formatDate(selectedBooking.approval_date) : 'Not recorded'} />
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '4px' }}>Reason</div>
+                  <div style={{ fontSize: '14px', color: 'var(--text-main)', lineHeight: 1.5 }}>{selectedBooking.notes || 'Not recorded'}</div>
+                </div>
               </div>
             )}
 
             {/* DECISION CARD */}
             {['pending', 'tentative'].includes((selectedBooking.status || 'pending').toLowerCase()) && (
-              <div style={{ border: '1px solid #283593', borderRadius: '12px', padding: '16px', background: '#f8faff' }}>
-                <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#1a237e', margin: '0 0 12px 0', fontFamily: 'serif' }}>Decision Notes</h4>
-                
-                <textarea 
-                  placeholder="Optional note to the requester (included in the email)..." 
+              <div style={{ border: '1px solid var(--decision-border)', borderRadius: '12px', padding: '16px', background: 'var(--decision-bg)' }}>
+                <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--decision-heading)', margin: '0 0 12px 0', fontFamily: 'serif' }}>Decision Notes</h4>
+
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '6px' }}>
+                  Reason <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <textarea
+                  placeholder="Reason for this decision..."
                   value={decisionNote}
-                  onChange={(e) => setDecisionNote(e.target.value)}
-                  style={{ width: '100%', height: '80px', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', resize: 'none', marginBottom: '12px', outline: 'none' }}
+                  onChange={(e) => {
+                    setDecisionNote(e.target.value);
+                    if (e.target.value.trim()) setNoteError(false);
+                  }}
+                  style={{
+                    width: '100%', height: '80px', padding: '10px', borderRadius: '8px',
+                    border: noteError ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                    boxShadow: noteError ? '0 0 0 1px #ef4444' : 'none',
+                    background: 'var(--input-bg)', color: 'var(--text-main)',
+                    fontSize: '13px', resize: 'none', marginBottom: '4px', outline: 'none'
+                  }}
                 />
-                
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#111827', fontWeight: 500, marginBottom: '16px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={notifyRequester} onChange={(e) => setNotifyRequester(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#1a237e' }} />
+                {noteError ? (
+                  <p style={{ fontSize: '12px', color: '#ef4444', margin: '0 0 12px 0', fontWeight: 500 }}>Reason is required before you can approve or decline.</p>
+                ) : (
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 12px 0' }}>Saved with the booking and included in the notification email.</p>
+                )}
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-main)', fontWeight: 500, marginBottom: '16px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={notifyRequester} onChange={(e) => setNotifyRequester(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: 'var(--decision-border)' }} />
                   Notify requester by email
                 </label>
 
                 <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                  <button 
-                    onClick={() => setConfirmDialog({ id: selectedBooking.id, type: 'rejected', roomName: selectedBooking.room_name || selectedBooking.room_id || 'Unknown Room' })}
-                    style={{ flex: 1, background: '#ffffff', color: '#374151', border: '1px solid #d1d5db', padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
+                  <button
+                    onClick={() => {
+                      if (!decisionNote.trim()) { setNoteError(true); return; }
+                      setNoteError(false);
+                      setConfirmDialog({ id: selectedBooking.id, type: 'rejected', roomName: toTitleCase(selectedBooking.room_name) || selectedBooking.room_id || 'Unknown Room' });
+                    }}
+                    style={{ flex: 1, background: 'transparent', color: 'var(--text-main)', border: '1px solid var(--text-main)', padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
                   >
                     Decline
                   </button>
-                  <button 
-                    onClick={() => setConfirmDialog({ id: selectedBooking.id, type: 'confirmed', roomName: selectedBooking.room_name || selectedBooking.room_id || 'Unknown Room' })}
-                    style={{ flex: 1, background: '#111827', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
+                  <button
+                    onClick={() => {
+                      if (!decisionNote.trim()) { setNoteError(true); return; }
+                      setNoteError(false);
+                      setConfirmDialog({ id: selectedBooking.id, type: 'confirmed', roomName: toTitleCase(selectedBooking.room_name) || selectedBooking.room_id || 'Unknown Room' });
+                    }}
+                    style={{ flex: 1, background: 'var(--text-main)', color: 'var(--bg-page)', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}
                   >
                     Approve request
                   </button>
                 </div>
 
-                <p style={{ fontSize: '12px', color: '#64748b', margin: 0, lineHeight: 1.5 }}>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
                   Approving moves the request to <strong>Confirmed</strong>, sends a confirmation email with calendar details to <strong>{selectedBooking.booked_by_user_id || selectedBooking.booked_by_email || 'the user'}</strong>, and updates the queue count. Declining sends a decline email with your note.
                 </p>
               </div>
@@ -501,7 +550,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
         </div>
       )}
 
-      {selectedBooking && isFullScreen && <div className="modal-overlay" onClick={() => setIsFullScreen(false)} style={{ zIndex: 999, background: 'rgba(0,0,0,0.4)', position: 'fixed', inset: 0 }} />}
+      {selectedBooking && <div className="modal-overlay" onClick={() => setSelectedBooking(null)} style={{ zIndex: 999, background: 'rgba(0,0,0,0.4)', position: 'fixed', inset: 0 }} />}
 
       {/* CONFIRMATION SAFETY MODAL FOR INLINE TABLE BUTTONS AND WIDGET BUTTONS */}
       {confirmDialog && (
@@ -521,15 +570,18 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
               Are you sure you want to {confirmDialog.type === 'confirmed' ? 'approve' : 'decline'} the booking request for <strong>{confirmDialog.roomName}</strong>?
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-              <button 
+              <button
                 onClick={(e) => { e.stopPropagation(); setConfirmDialog(null); }}
                 style={{ padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-main)', fontWeight: 500 }}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={(e) => { e.stopPropagation(); executeAction(confirmDialog.type); }}
-                style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: confirmDialog.type === 'confirmed' ? '#111827' : '#ef4444', color: '#ffffff', fontWeight: 500 }}
+                style={{
+                  padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                  background: confirmDialog.type === 'confirmed' ? '#111827' : '#ef4444', color: '#ffffff', fontWeight: 500
+                }}
               >
                 Yes, {confirmDialog.type === 'confirmed' ? 'Approve' : 'Decline'}
               </button>
