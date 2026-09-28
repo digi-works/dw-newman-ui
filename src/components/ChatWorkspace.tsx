@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useCopilotAction } from '@copilotkit/react-core';
 import { streamFlowiseChat } from '../flowise';
 import type { ChatSession } from '../types';
 
@@ -25,6 +26,83 @@ const NEWMAN_FACTS = [
   "Newman is the only Catholic university in the Diocese of Wichita.",
   "The campus spans 61 beautiful acres right in the heart of Wichita."
 ];
+
+// ==========================================
+// GENERATIVE UI — TABLE RENDERING
+// ==========================================
+// Shared markup for any tabular generative UI, whether it comes from an
+// explicit [ACTION:show_table]{...} marker or is auto-detected straight out
+// of Flowise's plain-text reply (see isMarkdownTableSeparator below).
+type TablePayload = { title?: string; columns?: string[]; rows?: Record<string, string | number>[] };
+
+function renderTableBlock(columns: string[], rows: Record<string, string | number>[], title?: string, key?: string | number) {
+  if (columns.length === 0 || rows.length === 0) {
+    return (
+      <div key={key} style={{ marginTop: '12px', padding: '12px', background: 'var(--sidebar-hover)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+        No table data was provided.
+      </div>
+    );
+  }
+
+  return (
+    <div key={key} style={{ marginTop: '12px', border: '1px solid var(--border-color)', borderRadius: '10px', overflow: 'hidden' }}>
+      {title && (
+        <div style={{ padding: '10px 14px', background: 'var(--sidebar-hover)', borderBottom: '1px solid var(--border-color)', fontWeight: 600, fontSize: '13px', color: 'var(--text-main)' }}>
+          {title}
+        </div>
+      )}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <thead>
+            <tr>
+              {columns.map(col => (
+                <th key={col} style={{ textAlign: 'left', padding: '10px 14px', color: 'var(--brand)', borderBottom: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} style={{ borderTop: i > 0 ? '1px solid var(--border-color)' : undefined }}>
+                {columns.map(col => (
+                  <td key={col} style={{ padding: '10px 14px', color: 'var(--text-main)' }}>
+                    {String(row[col] ?? '')}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Splits "| A | B |" into ["A", "B"], dropping **bold** markers the table can't render.
+function parseMarkdownTableRow(line: string): string[] {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.replace(/\*\*/g, '').trim());
+}
+
+// True for a markdown table separator row, e.g. "| --- | :---: |".
+function isMarkdownTableSeparator(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|') && !trimmed.includes('-')) return false;
+  const cells = parseMarkdownTableRow(trimmed);
+  return cells.length > 0 && cells.every(cell => /^:?-{2,}:?$/.test(cell));
+}
+
+// Converts a captured [header, separator, ...dataRows] block into {columns, rows}.
+function markdownTableToPayload(tableLines: string[]): { columns: string[]; rows: Record<string, string>[] } {
+  const columns = parseMarkdownTableRow(tableLines[0]);
+  const rows = tableLines.slice(2).map(line => {
+    const cells = parseMarkdownTableRow(line);
+    const row: Record<string, string> = {};
+    columns.forEach((col, i) => { row[col] = cells[i] ?? ''; });
+    return row;
+  });
+  return { columns, rows };
+}
 
 interface ChatWorkspaceProps {
   activeChat: ChatSession;
@@ -146,6 +224,31 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
         continue;
       }
 
+      // Generative UI: a markdown table straight out of Flowise's reply —
+      // "| A | B |" header followed by a "|---|---|" separator — renders as a
+      // real table instead of raw pipe characters. The model often puts blank
+      // lines between rows, so those are skipped rather than ending the table.
+      if (line.trim().startsWith('|')) {
+        const nextFilled = (from: number) => {
+          let k = from;
+          while (k < lines.length && lines[k].trim() === '') k++;
+          return k;
+        };
+        const sepIdx = nextFilled(i + 1);
+        if (sepIdx < lines.length && isMarkdownTableSeparator(lines[sepIdx])) {
+          const tableLines = [line, lines[sepIdx]];
+          let j = nextFilled(sepIdx + 1);
+          while (j < lines.length && lines[j].trim().startsWith('|')) {
+            tableLines.push(lines[j]);
+            j = nextFilled(j + 1);
+          }
+          const { columns, rows } = markdownTableToPayload(tableLines);
+          renderedElements.push(renderTableBlock(columns, rows, undefined, `table-${i}`));
+          i = j - 1; // resume the outer loop right after the consumed table block
+          continue;
+        }
+      }
+
       line = line.replace(/^[\*\-]\s+[\*\-]\s+/, '- ');
 
       let isList = false;
@@ -233,17 +336,32 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
 
     try {
       await streamFlowiseChat(
-        textToSend, 
-        activeChatId, 
+        textToSend,
+        activeChatId,
         (fullText) => {
           const { thought, answer } = parseThoughtAndAnswer(fullText);
-          
+
           setChats(prev => prev.map(chat => {
             if (chat.id === activeChatId) {
               return {
                 ...chat,
-                messages: chat.messages.map(msg => 
+                messages: chat.messages.map(msg =>
                   msg.id === aiMsgId ? { ...msg, content: answer, thought: thought || msg.thought } : msg
+                )
+              };
+            }
+            return chat;
+          }));
+        },
+        // Flowise decided this reply calls for a generative UI (e.g. [ACTION:book_room]{...}) —
+        // tag the message so it renders through the matching useCopilotAction below.
+        (actionName, payload) => {
+          setChats(prev => prev.map(chat => {
+            if (chat.id === activeChatId) {
+              return {
+                ...chat,
+                messages: chat.messages.map(msg =>
+                  msg.id === aiMsgId ? { ...msg, action: { name: actionName, payload } } : msg
                 )
               };
             }
@@ -284,16 +402,25 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
   // ==========================================
   // REAL-TIME 2-STEP BOOKING DETAILS FORM
   // ==========================================
-  const BookingDetailsForm = ({ aiMessage }: { aiMessage: string }) => {
+  type BookingPrefill = Partial<{
+    purpose: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    people: number;
+    building: string;
+  }>;
+
+  const BookingDetailsForm = ({ initialValues }: { initialValues?: BookingPrefill }) => {
     const [step, setStep] = useState(1);
-    
-    // Step 1 State (Requirements)
-    const [purpose, setPurpose] = useState('');
-    const [date, setDate] = useState('');
-    const [startTime, setStartTime] = useState('');
-    const [endTime, setEndTime] = useState('');
-    const [people, setPeople] = useState(12);
-    const [building, setBuilding] = useState('No preference');
+
+    // Step 1 State (Requirements) — prefilled from Flowise's book_room action payload, when present
+    const [purpose, setPurpose] = useState(initialValues?.purpose ?? '');
+    const [date, setDate] = useState(initialValues?.date ?? '');
+    const [startTime, setStartTime] = useState(initialValues?.startTime ?? '');
+    const [endTime, setEndTime] = useState(initialValues?.endTime ?? '');
+    const [people, setPeople] = useState(initialValues?.people ?? 12);
+    const [building, setBuilding] = useState(initialValues?.building ?? 'No preference');
     const [needs, setNeeds] = useState<string[]>([]);
     
     // Dynamic Buildings State
@@ -608,42 +735,102 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     );
   };
 
+  // ==========================================
+  // REAL COPILOTKIT GENERATIVE UI REGISTRATION
+  // ==========================================
+  // Flowise remains the chat brain: it decides, from understanding the user's
+  // question, whether to emit an [ACTION:book_room]{...} marker (parsed in
+  // flowise.ts). When it does, the tagged message renders through this action's
+  // `render` — CopilotKit's actual generative-UI API — instead of guessing from
+  // the reply text.
+  const renderBookingForm = (props: { args?: Record<string, unknown> }) => {
+    return <BookingDetailsForm initialValues={props.args as BookingPrefill} />;
+  };
+
+  useCopilotAction({
+    name: 'book_room',
+    description: 'Shows the interactive room booking form so the user can search availability and submit a reservation request.',
+    parameters: [
+      { name: 'purpose', type: 'string', required: false, description: 'What the room is being booked for' },
+      { name: 'date', type: 'string', required: false, description: 'Requested date (YYYY-MM-DD)' },
+      { name: 'startTime', type: 'string', required: false, description: 'Start time, 24h HH:MM' },
+      { name: 'endTime', type: 'string', required: false, description: 'End time, 24h HH:MM' },
+      { name: 'people', type: 'number', required: false, description: 'Number of attendees' },
+      { name: 'building', type: 'string', required: false, description: 'Preferred building name' },
+    ],
+    handler: async () => 'Displayed the room booking form to the user.',
+    render: renderBookingForm,
+  });
+
+  // Generic tabular generative UI — used for "this week's events", athletics
+  // fixtures, bookings lists, etc. Flowise supplies column headers and row
+  // objects keyed by those headers; we just lay it out as a real table.
+  const renderGenerativeTable = (props: { args?: Record<string, unknown> }) => {
+    const payload = (props.args ?? {}) as TablePayload;
+    const columns = Array.isArray(payload.columns) ? payload.columns : [];
+    const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    return renderTableBlock(columns, rows, payload.title);
+  };
+
+  // Fallback for any other [ACTION:name]{...} Flowise emits that isn't
+  // 'book_room' or 'show_table' — so a tool call the frontend hasn't
+  // special-cased yet still renders something instead of silently vanishing
+  // (the marker is always stripped out of the visible text either way).
+  // Tabular payloads become a table; everything else becomes a key/value card.
+  const renderGenerativeCard = (props: { args?: Record<string, unknown> }) => {
+    const payload = props.args ?? {};
+    const { title, ...rest } = payload as { title?: unknown; [key: string]: unknown };
+    const entries = Object.entries(rest);
+
+    if (entries.length === 0) return null;
+
+    return (
+      <div style={{ marginTop: '12px', border: '1px solid var(--border-color)', borderRadius: '10px', overflow: 'hidden' }}>
+        {typeof title === 'string' && (
+          <div style={{ padding: '10px 14px', background: 'var(--sidebar-hover)', borderBottom: '1px solid var(--border-color)', fontWeight: 600, fontSize: '13px', color: 'var(--text-main)' }}>
+            {title}
+          </div>
+        )}
+        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {entries.map(([key, value]) => (
+            <div key={key} style={{ display: 'flex', gap: '8px', fontSize: '13px' }}>
+              <span style={{ color: 'var(--brand)', fontWeight: 600, minWidth: '110px' }}>{key}</span>
+              <span style={{ color: 'var(--text-main)' }}>
+                {Array.isArray(value) ? value.join(', ') : String(value)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderGenerativeAction = (props: { args?: Record<string, unknown> }) => {
+    const payload = (props.args ?? {}) as TablePayload;
+    if (Array.isArray(payload.columns) && Array.isArray(payload.rows)) {
+      return renderGenerativeTable(props);
+    }
+    return renderGenerativeCard(props);
+  };
+
+  useCopilotAction({
+    name: 'show_table',
+    description: 'Shows tabular data (campus events, athletics fixtures, bookings, etc.) as a formatted table instead of plain text.',
+    parameters: [
+      { name: 'title', type: 'string', required: false, description: 'Table heading' },
+      { name: 'columns', type: 'string[]', required: true, description: 'Column headers, in display order' },
+      { name: 'rows', type: 'object[]', required: true, description: 'Row objects keyed by column header' },
+    ],
+    handler: async () => 'Displayed the table to the user.',
+    render: renderGenerativeTable,
+  });
+
   const isFirstMessage = activeChat.messages.length === 0;
 
-  let isWaitingForForm = false;
   const lastMsg = activeChat.messages[activeChat.messages.length - 1];
-  if (lastMsg && lastMsg.role === 'ai') {
-    const contentLower = lastMsg.content.toLowerCase();
-    
-    const hasStudentId = contentLower.includes('student id');
-    const hasEmail = contentLower.includes('email');
-    const hasFullName = contentLower.includes('full name') || contentLower.includes('your name') || contentLower.includes('name:');
-    
-    const asksForPersonal = hasStudentId && (hasEmail || hasFullName);
-    const asksForRoomDetails = (contentLower.includes('what is it for') || contentLower.includes('how many people')) && 
-                               (contentLower.includes('date') || contentLower.includes('time'));
-    
-    const isRequesting = contentLower.includes('need') || 
-                         contentLower.includes('provide') || 
-                         contentLower.includes('fill') || 
-                         contentLower.includes('complete') ||
-                         contentLower.includes('details') ||
-                         contentLower.includes('tell me');
-                         
-    const isConfirmation = contentLower.includes('successfully') || 
-                           contentLower.includes('confirmed') || 
-                           (contentLower.includes('booked') && !contentLower.includes('need to book'));
-                           
-    const prevMsg = activeChat.messages.length > 1 ? activeChat.messages[activeChat.messages.length - 2] : null;
-    
-    // NEW: Allow the UI to know the form was submitted even without the JSON block
-    const justSubmittedForm = prevMsg?.role === 'user' && 
-      (prevMsg.content.includes('```json') || prevMsg.content.includes('Here are my details for the booking:'));
-    
-    isWaitingForForm =
-      lastMsg.id === forcedBookingMsgId ||
-      ((asksForPersonal || asksForRoomDetails) && isRequesting && !isConfirmation && !justSubmittedForm);
-  }
+  const isWaitingForForm =
+    !!lastMsg && lastMsg.role === 'ai' &&
+    (lastMsg.id === forcedBookingMsgId || lastMsg.action?.name === 'book_room');
 
   return (
     <section className="chat-workspace">
@@ -718,44 +905,14 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
           <div className="messages-list">
             {activeChat.messages.map((msg, index) => {
               const isCurrentLoading = isLoading && msg.role === 'ai' && index === activeChat.messages.length - 1;
-              
-              const contentLower = msg.content.toLowerCase();
-              
-              const hasStudentId = contentLower.includes('student id');
-              const hasEmail = contentLower.includes('email');
-              const hasFullName = contentLower.includes('full name') || contentLower.includes('your name') || contentLower.includes('name:');
-              
-              const asksForPersonal = hasStudentId && (hasEmail || hasFullName);
-              const asksForRoomDetails = (contentLower.includes('what is it for') || contentLower.includes('how many people')) && 
-                                         (contentLower.includes('date') || contentLower.includes('time'));
-              
-              const isRequesting = contentLower.includes('need') || 
-                                   contentLower.includes('provide') || 
-                                   contentLower.includes('fill') || 
-                                   contentLower.includes('complete') ||
-                                   contentLower.includes('details') ||
-                                   contentLower.includes('tell me');
-                                   
-              const isConfirmation = contentLower.includes('successfully') || 
-                                     contentLower.includes('confirmed') || 
-                                     (contentLower.includes('booked') && !contentLower.includes('need to book'));
-                                     
-              const prevMsg = index > 0 ? activeChat.messages[index - 1] : null;
-              
-              // NEW: Match the new form validation string
-              const justSubmittedForm = prevMsg?.role === 'user' && 
-                (prevMsg.content.includes('```json') || prevMsg.content.includes('Here are my details for the booking:'));
-              
-              const isBookingForm = msg.role === 'ai' && (
-                msg.id === forcedBookingMsgId ||
-                (
-                  (asksForPersonal || asksForRoomDetails) &&
-                  isRequesting &&
-                  !isConfirmation &&
-                  !justSubmittedForm
-                )
-              );
-              
+
+              const isBookingForm = msg.role === 'ai' &&
+                (msg.id === forcedBookingMsgId || msg.action?.name === 'book_room');
+              // Any other action name Flowise emits (show_table included) renders
+              // generatively — book_room keeps its own dedicated path above and is
+              // excluded here so the two never double-render.
+              const isGenerativeAction = msg.role === 'ai' && !!msg.action && msg.action.name !== 'book_room';
+
               const isLastMessage = index === activeChat.messages.length - 1;
 
               return (
@@ -795,13 +952,15 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                       </div>
                     )}
                     {isBookingForm && isLastMessage && !isCurrentLoading && (
-                       <BookingDetailsForm aiMessage="{msg.content}"/>
+                       renderBookingForm({ args: msg.action?.payload })
                     )}
                     {isBookingForm && !isLastMessage && (
                       <div style={{ marginTop: '12px', padding: '12px', background: 'var(--sidebar-hover)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
                         ✓ Form submitted
                       </div>
                     )}
+
+                    {isGenerativeAction && renderGenerativeAction({ args: msg.action?.payload })}
 
                   </div>
                 </div>

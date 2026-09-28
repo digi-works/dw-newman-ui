@@ -466,6 +466,7 @@ export default function BookingsWorkspace({ onBookRoom, onCloseDrawer }: Booking
             {/* ROOM CARD */}
             <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', marginBottom: '16px', background: 'var(--bg-page)' }}>
               <h4 style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', margin: '0 0 16px 0', textTransform: 'uppercase' }}>Room</h4>
+              <DataRow label="Room Name" value={toTitleCase(selectedBooking.room_name) || selectedBooking.room_id || 'Unknown Room'} />
               <DataRow label="Building" value={selectedBooking.building || 'DeMattias Hall'} />
               <DataRow label="Capacity" value={selectedBooking.room_capacity || 40} />
               <DataRow label="Features" value={formatNeeds(selectedBooking.room_features).join(' · ') || 'Standard setup'} />
