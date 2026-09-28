@@ -45,7 +45,8 @@ type FlowiseEvent = {
   export async function streamFlowiseChat(
     question: string,
     chatId: string,
-    onUpdate: (text: string) => void
+    onUpdate: (text: string) => void,
+    onAction?: (name: string, payload: Record<string, unknown>) => void
   ) {
     const flowiseUrl = process.env.NEXT_PUBLIC_FLOWISE_URL;
     const apiKey = process.env.NEXT_PUBLIC_FLOWISE_API_KEY;
@@ -69,20 +70,26 @@ type FlowiseEvent = {
     }
   
     let textBuffer = "";
-  
+    // How many [ACTION] blocks we've already reported via onAction — each token
+    // re-scans the full cumulative textBuffer, so this guards against re-firing
+    // the same action every time a new token arrives.
+    let firedActionCount = 0;
+
     for await (const ev of parseFlowiseSSE(res.body)) {
       if (ev.event === "token") {
         const delta = typeof ev.data === "string" ? ev.data : String(ev.data ?? "");
         textBuffer += delta;
-  
+
         // Don't render text if we are in the middle of typing an [ACTION] block
         const incompleteMarker = /\[ACTION[^\]]*$/.test(textBuffer);
         if (!incompleteMarker) {
-          
+
           let cleanText = textBuffer;
           let match;
-          
-          // Strip out fully completed [ACTION] blocks before showing them
+          const foundActions: { name: string; payload: Record<string, unknown> }[] = [];
+
+          // Strip out fully completed [ACTION] blocks before showing them, and
+          // collect their name + JSON payload so the caller can act on them.
           while ((match = ACTION_MARKER.exec(cleanText)) !== null) {
             const open = cleanText.indexOf("{", match.index);
             let depth = 0;
@@ -95,13 +102,25 @@ type FlowiseEvent = {
               }
             }
             if (end > -1) {
+              try {
+                foundActions.push({ name: match[1], payload: JSON.parse(cleanText.slice(open, end)) });
+              } catch {
+                foundActions.push({ name: match[1], payload: {} });
+              }
               cleanText = cleanText.slice(0, match.index) + cleanText.slice(end);
             } else {
-              break; 
+              break;
             }
           }
-          
-          onUpdate(cleanText); 
+
+          if (onAction && foundActions.length > firedActionCount) {
+            for (let i = firedActionCount; i < foundActions.length; i++) {
+              onAction(foundActions[i].name, foundActions[i].payload);
+            }
+            firedActionCount = foundActions.length;
+          }
+
+          onUpdate(cleanText);
         }
       } else if (ev.event === "error") {
         throw new Error(typeof ev.data === "string" ? ev.data : JSON.stringify(ev.data));
