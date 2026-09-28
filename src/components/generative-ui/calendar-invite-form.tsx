@@ -5,8 +5,8 @@ import { correctKeywordTypos } from '@/lib/fuzzy';
 // GENERATIVE UI — CALENDAR INVITE FORM
 // ==========================================
 // Two-step form, like the room booking form:
-//   Step 1 — pick ONE of the next 10 campus events from a table.
-//   Step 2 — enter the email the calendar invite should be sent to.
+//   Step 1 — tick one or more of the next 10 campus events in a table.
+//   Step 2 — enter the email the calendar invites should be sent to.
 // If the user already named the event ("add Mission Orientation to my
 // calendar"), step 1 is skipped and only the email step is shown.
 
@@ -110,7 +110,7 @@ export function CalendarInviteForm({
   // Event named by Flowise's [ACTION:calendar_invite]{"eventTitle": ...}, if any.
   eventTitle?: string;
   isSubmitting?: boolean;
-  onSubmit: (event: CampusEvent, email: string) => void;
+  onSubmit: (events: CampusEvent[], email: string) => void;
 }) {
   const [events, setEvents] = useState<CampusEvent[]>([]);
   const [namedEvent, setNamedEvent] = useState<CampusEvent | null>(null);
@@ -118,7 +118,7 @@ export function CalendarInviteForm({
   const [fetchError, setFetchError] = useState('');
 
   const [step, setStep] = useState(1);
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [email, setEmail] = useState('');
 
   useEffect(() => {
@@ -142,7 +142,13 @@ export function CalendarInviteForm({
       .finally(() => setIsFetching(false));
   }, [eventTitle, userText]);
 
-  const selectedEvent = namedEvent ?? events.find(e => e.id === selectedId) ?? null;
+  // Kept in table order, whatever order the boxes were ticked in.
+  const selectedEvents = namedEvent ? [namedEvent] : events.filter(e => selectedIds.includes(e.id));
+  const allSelected = events.length > 0 && selectedIds.length === events.length;
+
+  const toggleEvent = (id: string) =>
+    setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  const toggleAll = () => setSelectedIds(allSelected ? [] : events.map(e => e.id));
 
   // Validated against the raw value on purpose — spaces must fail, not get trimmed away.
   const isEmailValid = email === '' || EMAIL_REGEX.test(email);
@@ -170,7 +176,16 @@ export function CalendarInviteForm({
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
                       <tr>
-                        <th style={{ ...headStyle, width: '40px' }} aria-label="Select" />
+                        <th style={{ ...headStyle, width: '40px' }}>
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            ref={el => { if (el) el.indeterminate = selectedIds.length > 0 && !allSelected; }}
+                            onChange={toggleAll}
+                            aria-label="Select all events"
+                            style={{ accentColor: 'var(--brand)', cursor: 'pointer' }}
+                          />
+                        </th>
                         <th style={{ ...headStyle, width: '52px' }}>S.No.</th>
                         <th style={headStyle}>Event</th>
                         <th style={headStyle}>Date</th>
@@ -180,10 +195,9 @@ export function CalendarInviteForm({
                     </thead>
                     <tbody>
                       {events.map((e, i) => {
-                        const isSelected = e.id === selectedId;
-                        // Only one event at a time: picking a row replaces the previous
-                        // pick, and picking the selected row again clears it.
-                        const toggle = () => setSelectedId(isSelected ? '' : e.id);
+                        const isSelected = selectedIds.includes(e.id);
+                        // Clicking anywhere on the row ticks / unticks it.
+                        const toggle = () => toggleEvent(e.id);
                         return (
                           <tr
                             key={e.id}
@@ -218,18 +232,27 @@ export function CalendarInviteForm({
               )}
             </div>
 
-            <div className="step-actions">
-              <button className="booking-submit-btn" disabled={!selectedEvent} onClick={() => setStep(2)}>
+            <div className="step-actions" style={{ alignItems: 'center' }}>
+              {selectedEvents.length > 0 && (
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)', marginRight: 'auto' }}>
+                  {selectedEvents.length} event{selectedEvents.length > 1 ? 's' : ''} selected
+                </span>
+              )}
+              <button className="booking-submit-btn" disabled={selectedEvents.length === 0} onClick={() => setStep(2)}>
                 Next
               </button>
             </div>
           </>
         ) : (
           <>
-            {selectedEvent && (
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--green)', background: 'var(--green-tint)', padding: '8px 12px', borderRadius: '6px' }}>
-                ✓ {selectedEvent.title} · {formatDate(selectedEvent.date)} · {formatEventTime(selectedEvent)}
-                {selectedEvent.location && ` · ${selectedEvent.location}`}
+            {selectedEvents.length > 0 && (
+              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--green)', background: 'var(--green-tint)', padding: '8px 12px', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {selectedEvents.map(e => (
+                  <div key={e.id}>
+                    ✓ {e.title} · {formatDate(e.date)} · {formatEventTime(e)}
+                    {e.location && ` · ${e.location}`}
+                  </div>
+                ))}
               </div>
             )}
 
@@ -254,8 +277,8 @@ export function CalendarInviteForm({
               {!namedEvent && <button className="btn-secondary" onClick={() => setStep(1)}>Back</button>}
               <button
                 className="booking-submit-btn"
-                disabled={!selectedEvent || !email || !isEmailValid || isSubmitting}
-                onClick={() => selectedEvent && onSubmit(selectedEvent, email)}
+                disabled={selectedEvents.length === 0 || !email || !isEmailValid || isSubmitting}
+                onClick={() => onSubmit(selectedEvents, email)}
               >
                 {isSubmitting ? 'Submitting...' : 'Submit'}
               </button>

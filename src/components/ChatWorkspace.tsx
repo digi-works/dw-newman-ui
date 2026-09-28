@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useCopilotAction } from '@copilotkit/react-core';
 import { streamFlowiseChat } from '../flowise';
 import type { ChatSession, Message } from '../types';
-import { CalendarInviteForm, formatEventDate, formatEventTime, inviteReplyCutIndex, isCalendarInviteAction, isInviteRequest, isRefusal } from './generative-ui/calendar-invite-form';
+import { CalendarInviteForm, type CampusEvent, formatEventDate, formatEventTime, inviteReplyCutIndex, isCalendarInviteAction, isInviteRequest, isRefusal } from './generative-ui/calendar-invite-form';
 import { correctKeywordTypos } from '@/lib/fuzzy';
 
 const COUNTRY_CODES = [
@@ -887,19 +887,21 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
       userText={userText}
       eventTitle={eventTitle}
       isSubmitting={isLoading}
-      onSubmit={(event, email) => {
-        // Flowise's orchestrator sends invites when it gets exactly this sentence
-        // shape — "Send an invite for [event] to [email]" (its Rule 6). A JSON blob
-        // isn't in its prompt and gets the out-of-scope reply, unlike the booking form.
-        const when = `${formatEventDate(event)}, ${formatEventTime(event)}`;
-        const where = event.location ? ` at ${event.location}` : '';
-        const textToSend = `Send an invite for ${event.title} (${event.date}, ${formatEventTime(event)}${where}) to ${email}`;
+      onSubmit={(events, email) => {
+        // Flowise's orchestrator sends invites when it gets this sentence shape —
+        // "Send an invite for [event] to [email]" (its Rule 6). A JSON blob isn't in
+        // its prompt and gets the out-of-scope reply, unlike the booking form.
+        const describe = (e: CampusEvent) =>
+          `${e.title} (${e.date}, ${formatEventTime(e)}${e.location ? ` at ${e.location}` : ''})`;
+        const textToSend = events.length === 1
+          ? `Send an invite for ${describe(events[0])} to ${email}`
+          : `Send an invite for each of these events to ${email}:\n${events.map((e, i) => `${i + 1}. ${describe(e)}`).join('\n')}`;
 
         const heading = 'Here are my details for the calendar invite:';
-        let displayString = `${heading}\n- **Event:** ${event.title}\n- **When:** ${when}`;
-        if (event.location) displayString += `\n- **Where:** ${event.location}`;
-        displayString += `\n- **Email:** ${email}`;
-        submitMessage(textToSend, displayString);
+        const eventLines = events.map(e =>
+          `- **${e.title}:** ${formatEventDate(e)}, ${formatEventTime(e)}${e.location ? ` · ${e.location}` : ''}`
+        );
+        submitMessage(textToSend, `${heading}\n${eventLines.join('\n')}\n- **Email:** ${email}`);
       }}
     />
   );
