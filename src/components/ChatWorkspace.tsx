@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useCopilotAction } from '@copilotkit/react-core';
 import { streamFlowiseChat } from '../flowise';
-import type { ChatSession } from '../types';
+import type { ChatSession, Message } from '../types';
+import { CalendarInviteForm, formatEventDate, formatEventTime, inviteReplyCutIndex, isCalendarInviteAction, isInviteRequest, isRefusal } from './generative-ui/calendar-invite-form';
+import { correctKeywordTypos } from '@/lib/fuzzy';
 
 const COUNTRY_CODES = [
   { code: '+1', label: '🇺🇸 US +1', digits: 10 },
@@ -118,6 +120,10 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
   // set when the user explicitly asks to reserve a room, so the form isn't at the mercy
   // of keyword-matching the AI's reply text.
   const [forcedBookingMsgId, setForcedBookingMsgId] = useState<string | null>(null);
+  // Hover actions on the user's own messages (copy / edit & resend), ChatGPT-style.
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -387,8 +393,39 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     }
   };
 
+  // Typed messages go to Flowise with key-word typos fixed ("calnder inviute" →
+  // "calendar invite") so it understands them; the chat still shows what was typed.
+  const sendTyped = (text: string) => submitMessage(correctKeywordTypos(text), text);
+
+  const handleCopy = async (msg: Message) => {
+    try {
+      await navigator.clipboard.writeText(msg.content);
+      setCopiedMsgId(msg.id);
+      setTimeout(() => setCopiedMsgId(current => (current === msg.id ? null : current)), 1500);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  const startEditing = (msg: Message) => {
+    setEditingMsgId(msg.id);
+    setEditText(msg.content);
+  };
+
+  // Like ChatGPT: editing a message drops it and everything after it, then
+  // sends the edited text as a fresh message.
+  const submitEdit = (index: number) => {
+    const text = editText.trim();
+    if (!text || isLoading) return;
+    setEditingMsgId(null);
+    setChats(prev => prev.map(chat =>
+      chat.id === activeChatId ? { ...chat, messages: chat.messages.slice(0, index) } : chat
+    ));
+    sendTyped(text);
+  };
+
   const handleInputSend = () => {
-    submitMessage(inputText);
+    sendTyped(inputText);
     setInputText('');
   };
 
@@ -825,12 +862,65 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
     render: renderGenerativeTable,
   });
 
+  // The other form: a calendar invite for a campus event. It shows when Flowise
+  // emits [ACTION:calendar_invite]{...}, or whenever the user's request is to put
+  // an event on their calendar / send them an invite. Step 1 lets them pick one
+  // of the next 10 events (skipped if they already named one); step 2 takes the
+  // email to send the invite to.
+  const getInviteForm = (msg: Message): { userText: string; eventTitle?: string; cutIndex?: number } | null => {
+    if (msg.role !== 'ai' || msg.id === forcedBookingMsgId || msg.action?.name === 'book_room') return null;
+    const idx = activeChat.messages.findIndex(m => m.id === msg.id);
+    const userText = activeChat.messages.slice(0, idx).reverse().find(m => m.role === 'user')?.content ?? '';
+    if (msg.action) {
+      if (!isCalendarInviteAction(msg.action.name)) return null;
+      const { eventTitle } = msg.action.payload;
+      return { userText, eventTitle: typeof eventTitle === 'string' ? eventTitle : undefined };
+    }
+    if (!isInviteRequest(userText)) return null;
+    // Flowise refused a request the form can handle — hide the refusal (cut at 0).
+    if (isRefusal(msg.content)) return { userText, cutIndex: 0 };
+    return { userText, cutIndex: inviteReplyCutIndex(msg.content) };
+  };
+
+  const renderInviteForm = (userText: string, eventTitle?: string) => (
+    <CalendarInviteForm
+      userText={userText}
+      eventTitle={eventTitle}
+      isSubmitting={isLoading}
+      onSubmit={(event, email) => {
+        // Flowise's orchestrator sends invites when it gets exactly this sentence
+        // shape — "Send an invite for [event] to [email]" (its Rule 6). A JSON blob
+        // isn't in its prompt and gets the out-of-scope reply, unlike the booking form.
+        const when = `${formatEventDate(event)}, ${formatEventTime(event)}`;
+        const where = event.location ? ` at ${event.location}` : '';
+        const textToSend = `Send an invite for ${event.title} (${event.date}, ${formatEventTime(event)}${where}) to ${email}`;
+
+        const heading = 'Here are my details for the calendar invite:';
+        let displayString = `${heading}\n- **Event:** ${event.title}\n- **When:** ${when}`;
+        if (event.location) displayString += `\n- **Where:** ${event.location}`;
+        displayString += `\n- **Email:** ${email}`;
+        submitMessage(textToSend, displayString);
+      }}
+    />
+  );
+
+  useCopilotAction({
+    name: 'calendar_invite',
+    description: 'Shows the calendar invite form: the user picks one of the next 10 campus events (or the named one) and enters the email to send the invite to.',
+    parameters: [
+      { name: 'eventTitle', type: 'string', required: false, description: 'Name of the event, if the user already said which one' },
+    ],
+    handler: async () => 'Displayed the calendar invite form to the user.',
+    render: (props: { args?: Record<string, unknown> }) =>
+      renderInviteForm('', typeof props.args?.eventTitle === 'string' ? props.args.eventTitle : undefined),
+  });
+
   const isFirstMessage = activeChat.messages.length === 0;
 
   const lastMsg = activeChat.messages[activeChat.messages.length - 1];
   const isWaitingForForm =
-    !!lastMsg && lastMsg.role === 'ai' &&
-    (lastMsg.id === forcedBookingMsgId || lastMsg.action?.name === 'book_room');
+    !!lastMsg && lastMsg.role === 'ai' && !isLoading &&
+    (lastMsg.id === forcedBookingMsgId || lastMsg.action?.name === 'book_room' || !!getInviteForm(lastMsg));
 
   return (
     <section className="chat-workspace">
@@ -911,7 +1001,10 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
               // Any other action name Flowise emits (show_table included) renders
               // generatively — book_room keeps its own dedicated path above and is
               // excluded here so the two never double-render.
-              const isGenerativeAction = msg.role === 'ai' && !!msg.action && msg.action.name !== 'book_room';
+              // Resolved only once the reply has finished streaming, so the form
+              // doesn't flash in and out while Flowise is still typing.
+              const inviteForm = isCurrentLoading ? null : getInviteForm(msg);
+              const isGenerativeAction = msg.role === 'ai' && !!msg.action && msg.action.name !== 'book_room' && !inviteForm;
 
               const isLastMessage = index === activeChat.messages.length - 1;
 
@@ -924,6 +1017,46 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                     </div>
                   )}
                   
+                  {msg.role === 'user' ? (
+                    <div className="user-message-group">
+                      {editingMsgId === msg.id ? (
+                        <div className="message-edit-box">
+                          <textarea
+                            autoFocus
+                            rows={Math.min(8, Math.max(2, editText.split('\n').length))}
+                            value={editText}
+                            onChange={e => setEditText(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitEdit(index); }
+                              if (e.key === 'Escape') setEditingMsgId(null);
+                            }}
+                          />
+                          <div className="message-edit-actions">
+                            <button className="btn-secondary" onClick={() => setEditingMsgId(null)}>Cancel</button>
+                            <button className="booking-submit-btn" disabled={!editText.trim() || isLoading} onClick={() => submitEdit(index)}>Send</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="message-bubble user">
+                            <div className="formatted-message">{renderFormattedText(msg.content)}</div>
+                          </div>
+                          <div className="message-actions">
+                            <button className="message-action-btn" onClick={() => handleCopy(msg)} aria-label="Copy message" title={copiedMsgId === msg.id ? 'Copied!' : 'Copy'}>
+                              {copiedMsgId === msg.id ? (
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                              ) : (
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                              )}
+                            </button>
+                            <button className="message-action-btn" onClick={() => startEditing(msg)} disabled={isLoading} aria-label="Edit message" title="Edit">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : (
                   <div className={`message-bubble ${msg.role}`}>
                     
                     {msg.thought && isCurrentLoading && (
@@ -942,7 +1075,12 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
 
                     {msg.content && (
                       <div className="formatted-message">
-                        {renderFormattedText(msg.content, isBookingForm)}
+                        {inviteForm?.cutIndex === 0
+                          ? <p style={{ marginBottom: '8px', lineHeight: '1.5' }}>Sure — let&apos;s get that on your calendar.</p>
+                          : renderFormattedText(
+                              inviteForm?.cutIndex !== undefined ? msg.content.slice(0, inviteForm.cutIndex).trim() : msg.content,
+                              isBookingForm,
+                            )}
                       </div>
                     )}
 
@@ -960,9 +1098,17 @@ export default function ChatWorkspace({ activeChat, activeChatId, setChats }: Ch
                       </div>
                     )}
 
+                    {inviteForm && isLastMessage && renderInviteForm(inviteForm.userText, inviteForm.eventTitle)}
+                    {inviteForm && !isLastMessage && activeChat.messages[index + 1]?.content.startsWith('Here are my details') && (
+                      <div style={{ marginTop: '12px', padding: '12px', background: 'var(--sidebar-hover)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                        ✓ Form submitted
+                      </div>
+                    )}
+
                     {isGenerativeAction && renderGenerativeAction({ args: msg.action?.payload })}
 
                   </div>
+                  )}
                 </div>
               );
             })}

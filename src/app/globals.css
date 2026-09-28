@@ -1864,3 +1864,89 @@ a:hover {
   backdrop-filter: blur(4px);
   z-index: 999;
 }
+
+/* ============================================================== */
+/* USER MESSAGE HOVER ACTIONS (copy / edit) — ChatGPT-style        */
+/* ============================================================== */
+.user-message-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 78%;
+}
+
+.user-message-group .message-bubble.user {
+  max-width: 100%;
+}
+
+.message-actions {
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.user-message-group:hover .message-actions,
+.message-actions:focus-within {
+  opacity: 1;
+}
+
+/* Touch screens have no hover — keep the actions visible there. */
+@media (hover: none) {
+  .message-actions {
+    opacity: 1;
+  }
+}
+
+.message-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.message-action-btn:hover:not(:disabled) {
+  background: var(--sidebar-hover);
+  color: var(--text-main);
+}
+
+.message-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.message-edit-box {
+  width: 100%;
+  min-width: min(520px, 70vw);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-card);
+  border-radius: 18px;
+  padding: 12px 14px;
+}
+
+.message-edit-box textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-main);
+}
+
+.message-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
